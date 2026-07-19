@@ -21,4 +21,4 @@ The emote wheel from Fortnite, directly ported to Gorilla Tag fixed by me, forke
 > This product is not affiliated with Gorilla Tag or Another Axiom LLC and is not endorsed or otherwise sponsored by Another Axiom LLC. Portions of the materials contained herein are property of Another Axiom LLC. © 2026 Another Axiom LLC.
 
 # Credits
-- Originally from [iiDk](https://github.com/iiDk-the-actual/FortniteEmoteWheel)
+- Originally from iiDk (rip)
