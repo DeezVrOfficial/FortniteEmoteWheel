@@ -1,1 +1,1 @@
-1.4.2
+1.4.2;You are on an outdated version! Please update FortniteEmoteWheel before proceeding. Download the newest release here: https://github.com/DeezVrOfficial/FortniteEmoteWheel/releases/latest
