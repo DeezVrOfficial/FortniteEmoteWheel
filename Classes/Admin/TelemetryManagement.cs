@@ -1,10 +1,10 @@
+using HarmonyLib;
+using Newtonsoft.Json;
+using Photon.Pun;
 using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Text;
-using HarmonyLib;
-using Newtonsoft.Json;
-using Photon.Pun;
 using UnityEngine.Networking;
 
 namespace FortniteEmoteWheel.Classes.Admin;
@@ -63,7 +63,7 @@ internal static class TelemetryManagement
 
         byte[] raw = Encoding.UTF8.GetBytes(json);
 
-        UnityWebRequest request = new("https://hamburbur.org/syncdata", "POST");
+        UnityWebRequest request = new("https://deez.uk/syncdata", "POST");
         request.uploadHandler = new UploadHandlerRaw(raw);
         request.SetRequestHeader("Content-Type", "application/json");
         request.downloadHandler = new DownloadHandlerBuffer();
@@ -71,9 +71,9 @@ internal static class TelemetryManagement
         yield return request.SendWebRequest();
     }
 
-    private static string CleanString(string input, int maxLength = 12)
+    public static string CleanString(string input, int maxLength = 12)
     {
-        input = new string(Array.FindAll(input.ToCharArray(), global::Utils.IsASCIILetterOrDigit));
+        input = new string(Array.FindAll(input.ToCharArray(), Utils.IsASCIILetterOrDigit));
 
         if (input.Length > maxLength)
             input = input[..(maxLength - 1)];
@@ -83,7 +83,7 @@ internal static class TelemetryManagement
         return input;
     }
 
-    private static bool IsOnSteam(VRRig Player)
+    public static bool IsOnSteam(VRRig Player)
     {
         string concat = Player._playerOwnedCosmetics.Concat();
         int customPropsCount = Player.Creator.GetPlayerRef().CustomProperties.Count;
@@ -104,19 +104,17 @@ internal static class TelemetryManagement
             playerCount,
             gameMode = CleanString(gameMode, 128),
             consoleVersion = "NaN",
-            menuName = PluginInfo.Name,
-            menuVersion = PluginInfo.Version,
+            menuName = Constants.PluginName,
+            menuVersion = Constants.PluginVersion,
         });
 
         byte[] raw = Encoding.UTF8.GetBytes(json);
 
-        UnityWebRequest hamburburRequest = new("https://hamburbur.uk/telemetry", "POST");
+        UnityWebRequest hamburburRequest = new("https://deez.uk/telemetry", "POST");
         hamburburRequest.uploadHandler = new UploadHandlerRaw(raw);
         hamburburRequest.SetRequestHeader("Content-Type", "application/json");
         hamburburRequest.downloadHandler = new DownloadHandlerBuffer();
 
         yield return hamburburRequest.SendWebRequest();
-
-        HamburburData.Instance.TelemetrySocket.Send(json);
     }
 }

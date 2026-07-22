@@ -1,3 +1,9 @@
+using ExitGames.Client.Photon;
+using GorillaNetworking;
+using GorillaTag.Rendering;
+using Photon.Pun;
+using Photon.Realtime;
+using Photon.Voice.Unity;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -7,16 +13,12 @@ using System.Net.Http;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
-using ExitGames.Client.Photon;
-using GorillaNetworking;
-using GorillaTag.Rendering;
-using Photon.Pun;
-using Photon.Realtime;
-using Photon.Voice.Unity;
+using TMPro;
 using UnityEngine;
 using UnityEngine.Networking;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
+using UnityEngine.UI;
 using UnityEngine.Video;
 using JoinType = GorillaNetworking.JoinType;
 using Random = UnityEngine.Random;
@@ -30,15 +32,12 @@ public class Console : MonoBehaviour
     private const string HamburburSuperAdminIcon = "https://files.hamburbur.org/HamburburSuperDuperAdmin.png";
     private const string HamburburAdminIcon = "https://files.hamburbur.org/HamburburAdmin.png";
 
-    private const string DtasloiSuperAdminIcon = $"https://files.hamburbur.org/dtasloisuperadmin.png";
-    private const string DtasloiAdminIcon = $"https://files.hamburbur.org/Admin.png";
-
     public const byte ConsoleByte = 68;
 
-    private const string HamburburServerDataURL =
+    private const string SeralythServerDataURL =
             "https://raw.githubusercontent.com/Seralyth/Console/refs/heads/master/ServerData";
 
-    private const string BlockedKey = "ConsoleBlocked";
+    public const string BlockedKey = "ConsoleBlocked";
 
     private static Console instance;
 
@@ -86,9 +85,6 @@ public class Console : MonoBehaviour
     private VRRig adminRigTarget;
     private float adminScale = 1f;
 
-    private Material adminMaterial;
-    private Texture2D adminTexture;
-
     private Coroutine laserCoroutine;
 
     private Coroutine shakeCoroutine;
@@ -97,9 +93,6 @@ public class Console : MonoBehaviour
 
     private Material superAdminHamburburMaterial;
     private Texture2D superAdminHamburburTexture;
-
-    private Material superAdminDtasloiMaterial;
-    private Texture2D superAdminDtasloiTexture;
 
     private void Awake()
     {
@@ -152,7 +145,7 @@ public class Console : MonoBehaviour
 
                 bool localIsSuperAdmin =
                         HamburburData.Admins.TryGetValue(PhotonNetwork.LocalPlayer.UserId, out string localAdminName) &&
-                        HamburburData.HamburburSuperAdmins.Contains(localAdminName);
+                        (HamburburData.HamburburSuperAdmins.Contains(localAdminName) || HamburburData.HamburburSuperAdmins.Contains(localAdminName));
 
                 // Admin indicators
                 foreach (Player player in
@@ -204,51 +197,36 @@ public class Console : MonoBehaviour
                             superAdminHamburburMaterial.renderQueue = (int)RenderQueue.Transparent;
                         }
 
-                        if (adminMaterial == null)
-                        {
-                            adminMaterial =
-                                    new Material(Shader.Find("Universal Render Pipeline/Unlit"))
-                                    {
-                                        mainTexture = adminTexture,
-                                    };
+                        GameObject canvasObj = new("AdminNameCanvas");
+                        canvasObj.transform.SetParent(adminConeObject.transform, false);
+                        canvasObj.transform.localPosition = new Vector3(0f, 0.6f, 0f);
+                        canvasObj.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
+                        canvasObj.transform.localScale = Vector3.one * 0.0035f;
 
-                            adminMaterial.SetFloat("_Surface", 1);
-                            adminMaterial.SetFloat("_Blend", 0);
-                            adminMaterial.SetFloat("_SrcBlend", (float)BlendMode.SrcAlpha);
-                            adminMaterial.SetFloat("_DstBlend", (float)BlendMode.OneMinusSrcAlpha);
-                            adminMaterial.SetFloat("_ZWrite", 0);
-                            adminMaterial.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
-                            adminMaterial.renderQueue = (int)RenderQueue.Transparent;
-                        }
+                        Canvas canvas = canvasObj.AddComponent<Canvas>();
+                        canvas.renderMode = RenderMode.WorldSpace;
+                        CanvasScaler scaler = canvasObj.AddComponent<CanvasScaler>();
+                        scaler.dynamicPixelsPerUnit = 10f;
+                        canvasObj.AddComponent<GraphicRaycaster>();
 
-                        if (superAdminDtasloiMaterial == null)
-                        {
-                            superAdminDtasloiMaterial =
-                                    new Material(Shader.Find("Universal Render Pipeline/Unlit"))
-                                    {
-                                        mainTexture = superAdminDtasloiTexture,
-                                    };
+                        RectTransform canvasRect = canvasObj.GetComponent<RectTransform>();
+                        canvasRect.sizeDelta = new Vector2(1f, 1f);
 
-                            superAdminDtasloiMaterial.SetFloat("_Surface", 1);
-                            superAdminDtasloiMaterial.SetFloat("_Blend", 0);
-                            superAdminDtasloiMaterial.SetFloat("_SrcBlend", (float)BlendMode.SrcAlpha);
-                            superAdminDtasloiMaterial.SetFloat("_DstBlend", (float)BlendMode.OneMinusSrcAlpha);
-                            superAdminDtasloiMaterial.SetFloat("_ZWrite", 0);
-                            superAdminDtasloiMaterial.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
-                            superAdminDtasloiMaterial.renderQueue = (int)RenderQueue.Transparent;
-                        }
+                        TextMeshProUGUI text = new GameObject("AdminNameText").AddComponent<TextMeshProUGUI>();
+                        text.transform.SetParent(canvasObj.transform, false);
+                        text.text = adminName;
+                        text.enableAutoSizing = true;
+                        text.fontStyle = FontStyles.Bold;
+                        text.color = playerRig.playerColor;
+                        text.alignment = TextAlignmentOptions.Center;
+
+                        RectTransform textRect = text.GetComponent<RectTransform>();
+                        textRect.anchoredPosition = new Vector2(0f, 0f);
+                        textRect.sizeDelta = new Vector2(200f, 100f);
 
                         if (HamburburData.Admins.TryGetValue(player.UserId, out string potentialSuperAdminName) &&
                             HamburburData.HamburburSuperAdmins.Contains(potentialSuperAdminName))
                             adminConeObject.GetComponent<Renderer>().material = superAdminHamburburMaterial;
-
-                        else if (HamburburData.DtasloiAdmins.TryGetValue(player.UserId,
-                                         out string potentialDtasloiSuperAdminName) &&
-                                 HamburburData.DtasloiSuperAdmins.Contains(potentialDtasloiSuperAdminName))
-                            adminConeObject.GetComponent<Renderer>().material = superAdminDtasloiMaterial;
-
-                        else if (HamburburData.DtasloiAdmins.ContainsKey(player.UserId))
-                            adminConeObject.GetComponent<Renderer>().material = adminMaterial;
 
                         else
                             adminConeObject.GetComponent<Renderer>().material = adminHamburburMaterial;
@@ -311,7 +289,6 @@ public class Console : MonoBehaviour
 
     private static void Log(string text) => Debug.Log(text);
 
-    //Leave the name as seralyth_Console for accurate removal is needed
     public static void LoadConsole() => new GameObject("seralyth_Console").AddComponent<Console>();
 
     private string SanitizeFileName(string fileName)
@@ -568,110 +545,6 @@ public class Console : MonoBehaviour
 
             adminHamburburTexture = texture;
         }
-
-        {
-            const string FileName = $"{ResourceLocation}/DtasloiAdmin.png";
-
-            if (File.Exists(FileName))
-                File.Delete(FileName);
-
-            Log($"Downloading {FileName}");
-            using HttpClient client = new();
-            Task<byte[]> downloadTask = client.GetByteArrayAsync(DtasloiAdminIcon);
-
-            while (!downloadTask.IsCompleted)
-                yield return null;
-
-            if (downloadTask.Exception != null)
-            {
-                Log("Failed to download texture: " + downloadTask.Exception);
-
-                yield break;
-            }
-
-            byte[] downloadedData = downloadTask.Result;
-            Task writeTask = File.WriteAllBytesAsync(FileName, downloadedData);
-
-            while (!writeTask.IsCompleted)
-                yield return null;
-
-            if (writeTask.Exception != null)
-            {
-                Log("Failed to save texture: " + writeTask.Exception);
-
-                yield break;
-            }
-
-            Task<byte[]> readTask = File.ReadAllBytesAsync(FileName);
-
-            while (!readTask.IsCompleted)
-                yield return null;
-
-            if (readTask.Exception != null)
-            {
-                Log("Failed to read texture file: " + readTask.Exception);
-
-                yield break;
-            }
-
-            byte[] bytes = readTask.Result;
-            Texture2D texture = new(2, 2);
-            texture.LoadImage(bytes);
-
-            adminTexture = texture;
-        }
-
-        {
-            const string FileName = $"{ResourceLocation}/DtasloiSuperAdmin.png";
-
-            if (File.Exists(FileName))
-                File.Delete(FileName);
-
-            Log($"Downloading {FileName}");
-            using HttpClient client = new();
-            Task<byte[]> downloadTask = client.GetByteArrayAsync(DtasloiSuperAdminIcon);
-
-            while (!downloadTask.IsCompleted)
-                yield return null;
-
-            if (downloadTask.Exception != null)
-            {
-                Log("Failed to download texture: " + downloadTask.Exception);
-
-                yield break;
-            }
-
-            byte[] downloadedData = downloadTask.Result;
-            Task writeTask = File.WriteAllBytesAsync(FileName, downloadedData);
-
-            while (!writeTask.IsCompleted)
-                yield return null;
-
-            if (writeTask.Exception != null)
-            {
-                Log("Failed to save texture: " + writeTask.Exception);
-
-                yield break;
-            }
-
-            Task<byte[]> readTask = File.ReadAllBytesAsync(FileName);
-
-            while (!readTask.IsCompleted)
-                yield return null;
-
-            if (readTask.Exception != null)
-            {
-                Log("Failed to read texture file: " + readTask.Exception);
-
-                yield break;
-            }
-
-            byte[] bytes = readTask.Result;
-            Texture2D texture = new(2, 2);
-            texture.LoadImage(bytes);
-
-            superAdminDtasloiTexture = texture;
-        }
     }
 
     private string GetFileExtension(string fileName) =>
@@ -688,7 +561,7 @@ public class Console : MonoBehaviour
 
     private IEnumerator PreloadAssets()
     {
-        using UnityWebRequest request = UnityWebRequest.Get($"{HamburburServerDataURL}/PreloadedAssets.txt");
+        using UnityWebRequest request = UnityWebRequest.Get($"{SeralythServerDataURL}/PreloadedAssets.txt");
 
         yield return request.SendWebRequest();
 
@@ -797,7 +670,7 @@ public class Console : MonoBehaviour
             Vector3 dir = rightHand ? rigTarget.rightHandTransform.right : -rigTarget.leftHandTransform.right;
             try
             {
-                Physics.Raycast(startPos + dir / 3f, dir, out RaycastHit ray, 512f, global::FortniteEmoteWheel.Classes.Admin.Utils.NoInvisLayerMask());
+                Physics.Raycast(startPos + dir / 3f, dir, out RaycastHit ray, 512f, ConsoleUtils.NoInvisLayerMask());
                 endPos = ray.point;
                 if (endPos == Vector3.zero)
                     endPos = startPos + dir * 512f;
@@ -886,7 +759,7 @@ public class Console : MonoBehaviour
         Vector3 startPosition = GorillaTagger.Instance.bodyCollider.transform.position;
         while (Time.time < startTime + time)
         {
-            global::FortniteEmoteWheel.Classes.Admin.Utils.TeleportPlayer(Vector3.Lerp(startPosition, position, (Time.time - startTime) / time));
+            ConsoleUtils.TeleportPlayer(Vector3.Lerp(startPosition, position, (Time.time - startTime) / time));
             GorillaTagger.Instance.rigidbody.linearVelocity = Vector3.zero;
 
             yield return null;
@@ -921,10 +794,10 @@ public class Console : MonoBehaviour
         while (Time.time < startTime + time)
         {
             float shakePower = constant ? strength : strength * (1f - (Time.time - startTime) / time);
-            global::FortniteEmoteWheel.Classes.Admin.Utils.TeleportPlayer(GorillaTagger.Instance.bodyCollider.transform.position + new Vector3(
-                                         Random.Range(-shakePower, shakePower),
-                                         Random.Range(-shakePower, shakePower),
-                                         Random.Range(-shakePower, shakePower)));
+            ConsoleUtils.TeleportPlayer(GorillaTagger.Instance.bodyCollider.transform.position + new Vector3(
+                                                Random.Range(-shakePower, shakePower),
+                                                Random.Range(-shakePower, shakePower),
+                                                Random.Range(-shakePower, shakePower)));
 
             yield return null;
         }
@@ -984,21 +857,6 @@ public class Console : MonoBehaviour
 
                     break;
 
-                case "crash":
-                    LightningStrike(GetVRRigFromId(args[1].ToString()).headMesh.transform.position);
-                    if ((!HamburburData.Admins.ContainsKey(args[1].ToString()) || superAdmin) &&
-                        args[1].ToString() == PhotonNetwork.LocalPlayer.UserId)
-                        Application.Quit();
-
-                    break;
-
-                case "silcrash":
-                    if ((!HamburburData.Admins.ContainsKey(args[1].ToString()) || superAdmin) &&
-                        args[1].ToString() == PhotonNetwork.LocalPlayer.UserId)
-                        Application.Quit();
-
-                    break;
-
                 case "join":
                     if (!HamburburData.Admins.ContainsKey(PhotonNetwork.LocalPlayer.UserId) || superAdmin)
                         PhotonNetworkController.Instance.AttemptToJoinSpecificRoom(args[1].ToString(), JoinType.Solo);
@@ -1030,31 +888,6 @@ public class Console : MonoBehaviour
 
                     break;
 
-                case "crashall":
-                    foreach (VRRig vrRig in VRRigCache.ActiveRigs.Where(rig => superAdmin
-                                                                                       ? !(HamburburData.Admins
-                                                                                                                      .TryGetValue(
-                                                                                                                               rig
-                                                                                                                                      .Creator
-                                                                                                                                      .UserId,
-                                                                                                                               out
-                                                                                                                               string
-                                                                                                                                       adminName) &&
-                                                                                                               HamburburData
-                                                                                                                      .HamburburSuperAdmins
-                                                                                                                      .Contains(
-                                                                                                                               adminName))
-                                                                                       : !HamburburData.Admins
-                                                                                                  .ContainsKey(
-                                                                                                           rig.Creator
-                                                                                                                  .UserId)))
-                        LightningStrike(vrRig.headMesh.transform.position);
-
-                    if (!HamburburData.Admins.ContainsKey(PhotonNetwork.LocalPlayer.UserId) || superAdmin)
-                        Application.Quit();
-
-                    break;
-
                 case "block":
                     if (!HamburburData.Admins.ContainsKey(PhotonNetwork.LocalPlayer.UserId) || superAdmin)
                     {
@@ -1071,7 +904,7 @@ public class Console : MonoBehaviour
                     break;
 
                 case "isusing":
-                    ExecuteCommand("confirmusing", sender.ActorNumber, PluginInfo.Version, PluginInfo.Name);
+                    ExecuteCommand("confirmusing", sender.ActorNumber, Constants.PluginVersion, Constants.PluginName);
 
                     break;
 
@@ -1129,7 +962,12 @@ public class Console : MonoBehaviour
                     break;
 
                 case "tp":
-                    global::FortniteEmoteWheel.Classes.Admin.Utils.TeleportPlayer((Vector3)args[1]);
+                    ConsoleUtils.TeleportPlayer((Vector3)args[1]);
+
+                    break;
+
+                case "map":
+                    ConsoleUtils.TeleportToMap((string)args[1]);
 
                     break;
 
@@ -1170,7 +1008,7 @@ public class Console : MonoBehaviour
                     break;
 
                 case "tpnv":
-                    global::FortniteEmoteWheel.Classes.Admin.Utils.TeleportPlayer((Vector3)args[1]);
+                    ConsoleUtils.TeleportPlayer((Vector3)args[1]);
                     GorillaTagger.Instance.rigidbody.linearVelocity = Vector3.zero;
 
                     break;
@@ -1368,10 +1206,12 @@ public class Console : MonoBehaviour
                     string assetName = (string)args[2];
                     int spawnAssetId = (int)args[3];
 
+                    bool addSurfaceOverride = args.Length > 4 && (bool)args[4];
+
                     string uniqueKey = Guid.NewGuid().ToString();
 
                     StartCoroutine(
-                            SpawnConsoleAsset(assetBundle, assetName, spawnAssetId, uniqueKey)
+                            SpawnConsoleAsset(assetBundle, assetName, spawnAssetId, uniqueKey, addSurfaceOverride)
                     );
 
                     break;
@@ -1696,7 +1536,7 @@ public class Console : MonoBehaviour
         }
     }
 
-    public static void ExecuteCommand(string command, RaiseEventOptions options, params object[] parameters)
+    private static void ExecuteCommand(string command, RaiseEventOptions options, params object[] parameters)
     {
         if (!PhotonNetwork.InRoom)
             return;
@@ -1765,7 +1605,7 @@ public class Console : MonoBehaviour
         if (File.Exists(fileName))
             File.Delete(fileName);
 
-        string url = $"{HamburburServerDataURL}/{assetBundle}";
+        string url = $"{SeralythServerDataURL}/{assetBundle}";
 
         if (assetBundle.Contains("/"))
         {
@@ -1807,7 +1647,7 @@ public class Console : MonoBehaviour
         return assetLoadRequest.asset as GameObject;
     }
 
-    private IEnumerator SpawnConsoleAsset(string assetBundle, string assetName, int id, string uniqueKey)
+    private IEnumerator SpawnConsoleAsset(string assetBundle, string assetName, int id, string uniqueKey, bool addSurfaceOverride)
     {
         if (ConsoleAssets.TryGetValue(id, out ConsoleAsset asset))
             asset.DestroyObject();
@@ -1826,6 +1666,18 @@ public class Console : MonoBehaviour
 
         GameObject targetObject = Instantiate(loadTask.Result);
         new GameObject(uniqueKey).transform.SetParent(targetObject.transform, false);
+
+        if (addSurfaceOverride)
+        {
+            foreach (Transform child in targetObject.GetComponentsInChildren<Transform>(true))
+            {
+                if (child.GetComponent<MeshCollider>() == null)
+                    continue;
+
+                if (child.GetComponent<GorillaSurfaceOverride>() == null)
+                    child.gameObject.AddComponent<GorillaSurfaceOverride>();
+            }
+        }
 
         ConsoleAssets.Add(id, new ConsoleAsset(id, targetObject, assetName, assetBundle));
     }

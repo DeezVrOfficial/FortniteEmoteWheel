@@ -1,36 +1,35 @@
 ﻿using HarmonyLib;
 using System.Reflection;
 
-namespace FortniteEmoteWheel
+namespace FortniteEmoteWheel.Patches;
+
+public class HarmonyPatches
 {
-    public class HarmonyPatches
+    private static Harmony instance;
+
+    public static bool IsPatched { get; private set; }
+    public const string InstanceId = Constants.PluginGuid;
+
+    internal static void ApplyHarmonyPatches()
     {
-        private static Harmony instance;
-
-        public static bool IsPatched { get; private set; }
-        public const string InstanceId = PluginInfo.GUID;
-
-        internal static void ApplyHarmonyPatches()
+        if (!IsPatched)
         {
-            if (!IsPatched)
+            if (instance == null)
             {
-                if (instance == null)
-                {
-                    instance = new Harmony(InstanceId);
-                }
-
-                instance.PatchAll(Assembly.GetExecutingAssembly());
-                IsPatched = true;
+                instance = new Harmony(InstanceId);
             }
+
+            instance.PatchAll(Assembly.GetExecutingAssembly());
+            IsPatched = true;
         }
+    }
 
-        internal static void RemoveHarmonyPatches()
+    internal static void RemoveHarmonyPatches()
+    {
+        if (instance != null && IsPatched)
         {
-            if (instance != null && IsPatched)
-            {
-                instance.UnpatchSelf();
-                IsPatched = false;
-            }
+            instance.UnpatchSelf();
+            IsPatched = false;
         }
     }
 }

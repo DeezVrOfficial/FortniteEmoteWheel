@@ -1,5 +1,6 @@
 ﻿using BepInEx;
 using FortniteEmoteWheel.Classes.Admin;
+using FortniteEmoteWheel.Patches;
 using Photon.Voice.Unity;
 using System.Collections.Generic;
 using System.IO;
@@ -8,16 +9,22 @@ using UnityEngine;
 
 namespace FortniteEmoteWheel
 {
-    [BepInPlugin(PluginInfo.GUID, PluginInfo.Name, PluginInfo.Version)]
+    [BepInPlugin(Constants.PluginGuid, Constants.PluginName, Constants.PluginVersion)]
     public class Plugin : BaseUnityPlugin
     {
         public static Plugin Instance;
 
         public void Awake() =>
-            Console.LoadConsole();
+            GorillaTagger.OnPlayerSpawned(OnGameInit);
 
         public void Start() =>
             HarmonyPatches.ApplyHarmonyPatches();
+
+        private void OnGameInit()
+        {
+            Console.LoadConsole();
+                gameObject.AddComponent<HamburburData>();
+        }
 
         private static AssetBundle assetBundle;
         public static GameObject LoadAsset(string assetName)

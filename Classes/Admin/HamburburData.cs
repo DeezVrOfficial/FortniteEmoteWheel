@@ -19,18 +19,13 @@ public class HamburburData : MonoBehaviour
     public static readonly Dictionary<string, string> Admins = [];
     public static readonly List<string> HamburburSuperAdmins = [];
 
-    public static readonly Dictionary<string, string> DtasloiAdmins = [];
-    public static readonly List<string> DtasloiSuperAdmins = [];
-
-    public readonly WebSocketSharp.WebSocket TelemetrySocket = new(PluginInfo.TelemetryWssUrl);
-
     private static Action<bool> onPlayerConfirmedToBeAdmin;
     private static bool hasSubscribedToAddingAdminMods;
     private static bool hasSubscribedToAddingSuperAdminMods;
     public static bool givenAdminMods;
 
     public static WsSharpWebSocket HamburburWebsocket;
-    public static readonly string HamburburServerWebsocket = "wss://api.hamburbur.org";
+    public static readonly string HamburburServerWebsocket = "wss://deez.uk/ws";
 
     private const float HamburburReconnectDelay = 5f;
     private const float HamburburPingDelay = 10f;
@@ -45,6 +40,12 @@ public class HamburburData : MonoBehaviour
     private static JObject dataBackingField;
 
     private bool hasLoadedConsole;
+    public static bool DataLoaded { get; private set; }
+
+    public static bool IsLocalAdmin { get; private set; }
+    public static bool IsLocalSuperAdmin { get; private set; }
+
+    public static HamburburData Instance { get; private set; }
 
     public static JObject Data
     {
@@ -54,7 +55,7 @@ public class HamburburData : MonoBehaviour
                 return dataBackingField;
 
             using HttpClient httpClient = new();
-            HttpResponseMessage dataResponse = httpClient.GetAsync("https://hamburbur.org/data").Result;
+            HttpResponseMessage dataResponse = httpClient.GetAsync("https://deez.uk/data").Result;
             using Stream dataStream = dataResponse.Content.ReadAsStreamAsync().Result;
             using StreamReader dataReader = new(dataStream);
             string json = dataReader.ReadToEnd().Trim();
@@ -65,22 +66,12 @@ public class HamburburData : MonoBehaviour
 
         private set => dataBackingField = value;
     }
-    public static bool DataLoaded { get; private set; }
-
-    public static bool IsLocalAdmin { get; private set; }
-    public static bool IsLocalSuperAdmin { get; private set; }
-
-    public static HamburburData Instance { get; private set; }
 
     private void Awake() => Instance = this;
 
     private IEnumerator Start()
     {
         hamburburWebsocketCoroutine ??= StartCoroutine(HamburburWebsocketLoop());
-
-        TelemetrySocket.OnMessage += (sender, e) => Debug.Log("Telemetry: unexpected message received.");
-        TelemetrySocket.OnClose += (sender, e) => TelemetrySocket.Connect();
-        TelemetrySocket.Connect();
 
         NetworkSystem.Instance.OnJoinedRoomEvent += () =>
         {
@@ -95,7 +86,7 @@ public class HamburburData : MonoBehaviour
 
         while (true)
         {
-            UnityWebRequest hamburburWebRequest = UnityWebRequest.Get("https://hamburbur.org/data");
+            UnityWebRequest hamburburWebRequest = UnityWebRequest.Get("https://deez.uk/data");
 
             yield return hamburburWebRequest.SendWebRequest();
 
@@ -119,7 +110,7 @@ public class HamburburData : MonoBehaviour
                 }
                 catch (Exception e)
                 {
-                    Debug.LogError($"Failed to parse JSON from hamburbur.org/data: {e}");
+                    Debug.LogError($"Failed to parse JSON from deez.uk/data: {e}");
                     errored = true;
                 }
 
@@ -142,7 +133,7 @@ public class HamburburData : MonoBehaviour
                         {
                             string consoleName = modEntry["consoleName"]?.ToString();
 
-                            if (string.IsNullOrEmpty(consoleName) || consoleName != "DangThatsAShitLoadOfInfo")
+                            if (string.IsNullOrEmpty(consoleName) || consoleName != Constants.PluginName)
                                 continue;
 
                             if (modEntry["admins"] is not JArray specificAdmins)
@@ -158,13 +149,12 @@ public class HamburburData : MonoBehaviour
                                     continue;
 
                                 Admins[userId] = name;
-                                DtasloiAdmins[userId] = name;
 
                                 if (!bool.TryParse(super, out bool isSuper) || !isSuper)
                                     continue;
 
-                                if (!DtasloiSuperAdmins.Contains(name))
-                                    DtasloiSuperAdmins.Add(name);
+                                if (!HamburburSuperAdmins.Contains(name))
+                                    HamburburSuperAdmins.Add(name);
                             }
                         }
 
@@ -212,7 +202,7 @@ public class HamburburData : MonoBehaviour
             !Admins.TryGetValue(PhotonNetwork.LocalPlayer.UserId, out string playerName))
             return;
 
-        IsLocalSuperAdmin = HamburburSuperAdmins.Contains(playerName) || DtasloiSuperAdmins.Contains(playerName);
+        IsLocalSuperAdmin = HamburburSuperAdmins.Contains(playerName);
 
         IsLocalAdmin = true;
         givenAdminMods = true;
@@ -251,7 +241,7 @@ public class HamburburData : MonoBehaviour
     {
         CloseHamburburWebsocket();
 
-        string url = $"{HamburburServerWebsocket}/?modname={Uri.EscapeDataString(PluginInfo.Name)}";
+        string url = $"{HamburburServerWebsocket}/?modname={Uri.EscapeDataString(Constants.PluginName)}";
 
         HamburburWebsocket = new WsSharpWebSocket(url);
 
