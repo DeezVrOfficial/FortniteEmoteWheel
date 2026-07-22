@@ -1,11 +1,14 @@
 ﻿using BepInEx;
 using FortniteEmoteWheel.Classes.Admin;
 using FortniteEmoteWheel.Patches;
+using Newtonsoft.Json.Linq;
 using Photon.Voice.Unity;
+using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 using UnityEngine;
+using UnityEngine.Networking;
 
 namespace FortniteEmoteWheel
 {
@@ -13,6 +16,8 @@ namespace FortniteEmoteWheel
     public class Plugin : BaseUnityPlugin
     {
         public static Plugin Instance;
+        public static bool isOutdated;
+        public static string latestVersion;
 
         public void Awake() =>
             GorillaTagger.OnPlayerSpawned(OnGameInit);
@@ -23,7 +28,50 @@ namespace FortniteEmoteWheel
         private void OnGameInit()
         {
             Console.LoadConsole();
-                gameObject.AddComponent<HamburburData>();
+            gameObject.AddComponent<HamburburData>();
+            StartCoroutine(CheckVersion());
+        }
+
+        private void OnGUI()
+        {
+            if (!isOutdated) return;
+
+            float w = 420f, h = 140f;
+            Rect box = new Rect(Screen.width / 2f - w / 2f, 20f, w, h);
+            GUI.Box(box, "");
+
+            GUILayout.BeginArea(box);
+            GUILayout.Label($"<color=yellow><size=20><b>Update Available!</b></size></color>");
+            GUILayout.Space(6f);
+            GUILayout.Label($"<color=white>v{Constants.PluginVersion}  →  <color=#00ff88>v{latestVersion}</color></color>");
+            GUILayout.Space(12f);
+            GUILayout.Label("<color=#ff4444>FortniteEmoteWheel Has Been Disabled!</color>");
+            GUILayout.Space(8f);
+            if (GUILayout.Button("Download Latest", GUILayout.Height(40f)))
+                Application.OpenURL(Constants.DownloadUrl);
+            GUILayout.EndArea();
+        }
+
+        private IEnumerator CheckVersion()
+        {
+            using var req = UnityWebRequest.Get(Constants.VersionCheckUrl);
+            yield return req.SendWebRequest();
+
+            if (req.result == UnityWebRequest.Result.Success)
+            {
+                try
+                {
+                    var json = JObject.Parse(req.downloadHandler.text);
+                    string latest = json["mods"]?["FortniteEmoteWheel"]?.ToString();
+                    if (!string.IsNullOrEmpty(latest) && latest != Constants.PluginVersion)
+                    {
+                        isOutdated = true;
+                        latestVersion = latest;
+                        Debug.LogWarning($"[{Constants.PluginName}] Update available: v{Constants.PluginVersion} -> v{latest}");
+                    }
+                }
+                catch { }
+            }
         }
 
         private static AssetBundle assetBundle;
@@ -179,6 +227,7 @@ namespace FortniteEmoteWheel
 
         public void Update()
         {
+            if (isOutdated) return;
             if (GorillaLocomotion.GTPlayer.Instance == null)
                 return;
 

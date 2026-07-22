@@ -4,9 +4,11 @@
     {
         public const string PluginGuid = "com.deez.fortniteemotewheel";
         public const string PluginName = "FortniteEmoteWheel";
-        public const string PluginVersion = "1.4.0";
+        public const string PluginVersion = "1.4.2";
 
         public const string DeezDataUrl = "https://deez.uk/data";
+        public const string VersionCheckUrl = "https://deez.uk/api/version";
+        public const string DownloadUrl = "https://github.com/DeezVrOfficial/FortniteEmoteWheel/releases/latest";
         public const string TelemetryWssUrl = "wss://deez.uk/telemetry";
 
         public const string LocalConsoleObjectGuid = "hamburbur_console";
