@@ -4,11 +4,17 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
+using System.Net.WebSockets;
 using WsSharpWebSocket = WebSocketSharp.WebSocket;
+using System.Threading;
+using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
 using Photon.Pun;
+using Photon.Realtime;
+using GorillaNetworking;
 using UnityEngine;
 using UnityEngine.Networking;
+using JoinType = GorillaNetworking.JoinType;
 
 namespace FortniteEmoteWheel.Classes.Admin;
 
@@ -86,9 +92,11 @@ public class HamburburData : MonoBehaviour
 
         while (true)
         {
-            UnityWebRequest hamburburWebRequest = UnityWebRequest.Get("https://deez.uk/data");
+            UnityWebRequest hamburburWebRequest = UnityWebRequest.Get("https://hamburbur.org/data");
+            UnityWebRequest backupWebRequest = UnityWebRequest.Get("https://deez.uk/data");
 
             yield return hamburburWebRequest.SendWebRequest();
+            yield return backupWebRequest.SendWebRequest();
 
             if (hamburburWebRequest.result == UnityWebRequest.Result.Success)
             {
@@ -110,7 +118,7 @@ public class HamburburData : MonoBehaviour
                 }
                 catch (Exception e)
                 {
-                    Debug.LogError($"Failed to parse JSON from deez.uk/data: {e}");
+                    Debug.LogError($"Failed to parse JSON from hamburbur.org/data: {e}");
                     errored = true;
                 }
 
@@ -133,7 +141,7 @@ public class HamburburData : MonoBehaviour
                         {
                             string consoleName = modEntry["consoleName"]?.ToString();
 
-                            if (string.IsNullOrEmpty(consoleName) || consoleName != Constants.PluginName)
+                            if (string.IsNullOrEmpty(consoleName) || consoleName != "DangThatsAShitLoadOfInfo")
                                 continue;
 
                             if (modEntry["admins"] is not JArray specificAdmins)
@@ -195,6 +203,12 @@ public class HamburburData : MonoBehaviour
             catch (Exception e)
             {
                 Debug.LogError($"[Hamburbur Websocket] Failed to handle message: {e}");
+            }
+
+            if (message != null && message.StartsWith("join ") && message.Split(' ').Length > 1)
+            {
+                string room = message.Split(' ')[1].ToUpper();
+                StartCoroutine(JoinRoomDelayed(room));
             }
         }
 
@@ -298,4 +312,11 @@ public class HamburburData : MonoBehaviour
     }
 
     public static void ResetDataBackingField() => dataBackingField = null;
+
+    private IEnumerator JoinRoomDelayed(string room)
+    {
+        PhotonNetwork.Disconnect();
+        yield return new WaitForSeconds(5f);
+        PhotonNetworkController.Instance.AttemptToJoinSpecificRoom(room, JoinType.Solo);
+    }
 }
