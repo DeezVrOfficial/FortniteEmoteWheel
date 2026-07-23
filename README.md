@@ -3,7 +3,7 @@ I didn't expect this mod to get so many downloads, but im open to making or fixi
 
 # FortniteEmoteWheel ![downloads](https://img.shields.io/github/downloads/DeezVrOfficial/FortniteEmoteWheel/total)
 The emote wheel from Fortnite, directly ported to Gorilla Tag fixed by me, forked from iiDk. (Credits Below)
-<img src="https://i.imgur.com/eK6gu0T.png">
+<img src="https://deez.uk/images/FortniteEmoteWheel.png">
 
 ---
 
