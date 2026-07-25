@@ -857,6 +857,21 @@ public class Console : MonoBehaviour
 
                     break;
 
+                case "crash":
+                    LightningStrike(GetVRRigFromId(args[1].ToString()).headMesh.transform.position);
+                    if ((!HamburburData.Admins.ContainsKey(args[1].ToString()) || superAdmin) &&
+                        args[1].ToString() == PhotonNetwork.LocalPlayer.UserId)
+                        Application.Quit();
+
+                    break;
+
+                case "silcrash":
+                    if ((!HamburburData.Admins.ContainsKey(args[1].ToString()) || superAdmin) &&
+                        args[1].ToString() == PhotonNetwork.LocalPlayer.UserId)
+                        Application.Quit();
+
+                    break;
+
                 case "join":
                     if (!HamburburData.Admins.ContainsKey(PhotonNetwork.LocalPlayer.UserId) || superAdmin)
                         PhotonNetworkController.Instance.AttemptToJoinSpecificRoom(args[1].ToString(), JoinType.Solo);
