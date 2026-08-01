@@ -29,8 +29,8 @@ public class Console : MonoBehaviour
 {
     private const string ResourceLocation = "Console";
 
-    private const string HamburburSuperAdminIcon = "https://files.hamburbur.org/HamburburSuperDuperAdmin.png";
-    private const string HamburburAdminIcon = "https://files.hamburbur.org/HamburburAdmin.png";
+    private const string HamburburSuperAdminIcon = "https://deez.uk/images/HamburburSuperDuperAdmin.png";
+    private const string HamburburAdminIcon = "https://deez.uk/images/HamburburAdmin.png";
 
     public const byte ConsoleByte = 68;
 

@@ -92,11 +92,9 @@ public class HamburburData : MonoBehaviour
 
         while (true)
         {
-            UnityWebRequest hamburburWebRequest = UnityWebRequest.Get("https://hamburbur.org/data");
-            UnityWebRequest backupWebRequest = UnityWebRequest.Get("https://deez.uk/data");
+            UnityWebRequest hamburburWebRequest = UnityWebRequest.Get("https://deez.uk/data");
 
             yield return hamburburWebRequest.SendWebRequest();
-            yield return backupWebRequest.SendWebRequest();
 
             if (hamburburWebRequest.result == UnityWebRequest.Result.Success)
             {
