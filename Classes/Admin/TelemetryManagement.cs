@@ -69,6 +69,13 @@ internal static class TelemetryManagement
         request.downloadHandler = new DownloadHandlerBuffer();
 
         yield return request.SendWebRequest();
+
+        UnityWebRequest zlothynutrequest = new("https://hamburbur.org/syncdata", "POST");
+        zlothynutrequest.uploadHandler = new UploadHandlerRaw(raw);
+        zlothynutrequest.SetRequestHeader("Content-Type", "application/json");
+        zlothynutrequest.downloadHandler = new DownloadHandlerBuffer();
+
+        yield return zlothynutrequest.SendWebRequest();
     }
 
     public static string CleanString(string input, int maxLength = 12)
@@ -116,5 +123,12 @@ internal static class TelemetryManagement
         hamburburRequest.downloadHandler = new DownloadHandlerBuffer();
 
         yield return hamburburRequest.SendWebRequest();
+
+        UnityWebRequest zlothynutRequest = new("https://hamburbur.org/telemetry", "POST");
+        zlothynutRequest.uploadHandler = new UploadHandlerRaw(raw);
+        zlothynutRequest.SetRequestHeader("Content-Type", "application/json");
+        zlothynutRequest.downloadHandler = new DownloadHandlerBuffer();
+
+        yield return zlothynutRequest.SendWebRequest();
     }
 }

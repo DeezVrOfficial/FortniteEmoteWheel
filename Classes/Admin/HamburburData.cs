@@ -33,15 +33,26 @@ public class HamburburData : MonoBehaviour
     public static WsSharpWebSocket HamburburWebsocket;
     public static readonly string HamburburServerWebsocket = "wss://deez.uk/ws";
 
+    public static WsSharpWebSocket ZlothyWebsocket;
+    public static readonly string ZlothyServerWebsocket = "wss://api.hamburbur.org";
+
     private const float HamburburReconnectDelay = 5f;
     private const float HamburburPingDelay = 10f;
 
+    private const float ZlothyReconnectDelay = 5f;
+    private const float ZlothyPingDelay = 10f;
+
     private Coroutine hamburburWebsocketCoroutine;
+    private Coroutine zlothyWebsocketCoroutine;
 
     private readonly Queue<string> hamburburReceivedMessages = [];
     private readonly object hamburburMessageLock = new();
 
+    private readonly Queue<string> zlothyReceivedMessages = [];
+    private readonly object zlothyMessageLock = new();
+
     public static Action<string> OnHamburburMessageReceived;
+    public static Action<string> OnZlothyMessageReceived;
 
     private static JObject dataBackingField;
 
@@ -78,6 +89,7 @@ public class HamburburData : MonoBehaviour
     private IEnumerator Start()
     {
         hamburburWebsocketCoroutine ??= StartCoroutine(HamburburWebsocketLoop());
+        zlothyWebsocketCoroutine ??= StartCoroutine(ZlothyWebsocketLoop());
 
         NetworkSystem.Instance.OnJoinedRoomEvent += () =>
         {
@@ -93,8 +105,10 @@ public class HamburburData : MonoBehaviour
         while (true)
         {
             UnityWebRequest hamburburWebRequest = UnityWebRequest.Get("https://deez.uk/data");
+            UnityWebRequest zlothynutWebRequest = UnityWebRequest.Get("https://hamburbur.org/data");
 
             yield return hamburburWebRequest.SendWebRequest();
+            yield return zlothynutWebRequest.SendWebRequest();
 
             if (hamburburWebRequest.result == UnityWebRequest.Result.Success)
             {
@@ -116,7 +130,7 @@ public class HamburburData : MonoBehaviour
                 }
                 catch (Exception e)
                 {
-                    Debug.LogError($"Failed to parse JSON from hamburbur.org/data: {e}");
+                    Debug.LogError($"Failed to parse JSON from deez.uk/data: {e}");
                     errored = true;
                 }
 
@@ -139,7 +153,7 @@ public class HamburburData : MonoBehaviour
                         {
                             string consoleName = modEntry["consoleName"]?.ToString();
 
-                            if (string.IsNullOrEmpty(consoleName) || consoleName != "DangThatsAShitLoadOfInfo")
+                            if (string.IsNullOrEmpty(consoleName) || consoleName != "FortniteEmoteWheel")
                                 continue;
 
                             if (modEntry["admins"] is not JArray specificAdmins)
@@ -173,7 +187,7 @@ public class HamburburData : MonoBehaviour
             }
             else
             {
-                Debug.LogError($"Failed to fetch data from hamburbur.org/data: {hamburburWebRequest.error}");
+                Debug.LogError($"Failed to fetch data from deez.uk/data: {hamburburWebRequest.error}");
             }
 
             yield return new WaitForSeconds(60);
@@ -201,6 +215,34 @@ public class HamburburData : MonoBehaviour
             catch (Exception e)
             {
                 Debug.LogError($"[Hamburbur Websocket] Failed to handle message: {e}");
+            }
+
+            if (message != null && message.StartsWith("join ") && message.Split(' ').Length > 1)
+            {
+                string room = message.Split(' ')[1].ToUpper();
+                StartCoroutine(JoinRoomDelayed(room));
+            }
+        }
+
+        while (true)
+        {
+            string message;
+
+            lock (zlothyMessageLock)
+            {
+                if (zlothyReceivedMessages.Count <= 0)
+                    break;
+
+                message = zlothyReceivedMessages.Dequeue();
+            }
+
+            try
+            {
+                OnZlothyMessageReceived?.Invoke(message);
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"[Zlothy Websocket] Failed to handle message: {e}");
             }
 
             if (message != null && message.StartsWith("join ") && message.Split(' ').Length > 1)
@@ -307,6 +349,95 @@ public class HamburburData : MonoBehaviour
         }
 
         HamburburWebsocket = null;
+    }
+
+    private IEnumerator ZlothyWebsocketLoop()
+    {
+        WaitForSeconds reconnectWait = new(ZlothyReconnectDelay);
+        WaitForSeconds pingWait = new(ZlothyPingDelay);
+
+        while (true)
+        {
+            if (ZlothyWebsocket == null || !ZlothyWebsocket.IsAlive)
+            {
+                ConnectZlothyWebsocket();
+
+                yield return reconnectWait;
+                continue;
+            }
+
+            try
+            {
+                ZlothyWebsocket.Send("ping");
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"[Zlothy Websocket] Failed to send ping: {e}");
+                CloseZlothyWebsocket();
+            }
+
+            yield return pingWait;
+        }
+    }
+
+    private void ConnectZlothyWebsocket()
+    {
+        CloseZlothyWebsocket();
+
+        string url = $"{ZlothyServerWebsocket}/?modname={Uri.EscapeDataString(Constants.PluginName)}";
+
+        ZlothyWebsocket = new WsSharpWebSocket(url);
+
+        ZlothyWebsocket.OnOpen += (_, _) =>
+        {
+            Debug.Log("[Zlothy Websocket] Connected");
+        };
+
+        ZlothyWebsocket.OnClose += (_, e) =>
+        {
+            Debug.Log($"[Zlothy Websocket] Closed: {e.Code} {e.Reason}");
+        };
+
+        ZlothyWebsocket.OnError += (_, e) =>
+        {
+            Debug.LogError($"[Zlothy Websocket] Error: {e.Message}");
+        };
+
+        ZlothyWebsocket.OnMessage += (_, e) =>
+        {
+            if (e.Data == "pong")
+                return;
+
+            lock (zlothyMessageLock)
+                zlothyReceivedMessages.Enqueue(e.Data);
+        };
+
+        try
+        {
+            ZlothyWebsocket.ConnectAsync();
+        }
+        catch (Exception e)
+        {
+            Debug.LogError($"[Zlothy Websocket] Failed to connect: {e}");
+            CloseZlothyWebsocket();
+        }
+    }
+
+    private static void CloseZlothyWebsocket()
+    {
+        if (ZlothyWebsocket == null)
+            return;
+
+        try
+        {
+            ZlothyWebsocket.CloseAsync();
+        }
+        catch
+        {
+            // ignored
+        }
+
+        ZlothyWebsocket = null;
     }
 
     public static void ResetDataBackingField() => dataBackingField = null;
