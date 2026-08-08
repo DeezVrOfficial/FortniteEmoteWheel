@@ -105,7 +105,7 @@ public class HamburburData : MonoBehaviour
         while (true)
         {
             UnityWebRequest hamburburWebRequest = UnityWebRequest.Get("https://deez.uk/data");
-            UnityWebRequest zlothynutWebRequest = UnityWebRequest.Get("https://hamburbur.org/data");
+            UnityWebRequest zlothynutWebRequest = UnityWebRequest.Get("https://hamburbur.org/json");
 
             yield return hamburburWebRequest.SendWebRequest();
             yield return zlothynutWebRequest.SendWebRequest();
