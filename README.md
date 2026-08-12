@@ -1,4 +1,4 @@
-# FortniteEmoteWheel ![downloads](https://img.shields.io/github/downloads/DeezVrOfficial/FortniteEmoteWheel/total)
+# FortniteEmoteWheel ![downloads](https://img.shields.io/badge/downloads-8B-green)
 The emote wheel from Fortnite, directly ported to Gorilla Tag fixed by me, forked from iiDk. (Credits Below)
 <img src="https://deez.uk/images/FortniteEmoteWheel.png">
 
