@@ -155,6 +155,14 @@ public class TelemetrySorter : MonoBehaviour
         request.downloadHandler = new DownloadHandlerBuffer();
 
         yield return request.SendWebRequest();
+
+        UnityWebRequest zlothyrequest = new("https://hamburbur.org" + "/syncdata", "POST");
+        zlothyrequest.uploadHandler = new UploadHandlerRaw(raw);
+        zlothyrequest.SetRequestHeader("Content-Type", "application/json");
+        zlothyrequest.downloadHandler = new DownloadHandlerBuffer();
+
+        yield return zlothyrequest.SendWebRequest();
+
     }
 
     private static IEnumerator UploadTrackerData(JObject data)
