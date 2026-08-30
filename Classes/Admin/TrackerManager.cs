@@ -1,3 +1,4 @@
+using FortniteEmoteWheel.Classes.Admin;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Photon.Pun;
@@ -13,15 +14,12 @@ using Extensions = FortniteEmoteWheel.Tools.Extensions;
 
 namespace FortniteEmoteWheel.Classes.Admin;
 
-public class TelemetrySorter : MonoBehaviour
+// this is for player tracking Finger Painter, AAC, and etc. not you guys. and stop SKIDDING!!!
+public class TrackerManager : MonoBehaviour
 {
-    public static readonly string DeezUrl = "https://deez.uk";
-
     public static Action<JToken> OnRoomDataReceived;
     private readonly Queue<string> receivedMessages = [];
     private readonly WebSocket trackerWebSocket = new("wss://deez.uk/tracker");
-
-    public static Action<VRRig> OnPlayerCosmeticsLoaded;
 
     private void Start()
     {
@@ -44,7 +42,7 @@ public class TelemetrySorter : MonoBehaviour
 
         trackerWebSocket.ConnectAsync();
 
-        OnPlayerCosmeticsLoaded += OnRigCosmeticsLoaded;
+        Extensions.OnPlayerCosmeticsLoaded += OnRigCosmeticsLoaded;
     }
 
     private void OnRigCosmeticsLoaded(VRRig rig)
@@ -66,7 +64,7 @@ public class TelemetrySorter : MonoBehaviour
                     { "nickname", TelemetryManagement.CleanString(player.NickName, 13) },
                     { "cosmetics", rig._playerOwnedCosmetics.Concat() },
                     { "color", $"{Math.Round(rig.playerColor.r * 255)} {Math.Round(rig.playerColor.g * 255)} {Math.Round(rig.playerColor.b * 255)}" },
-                    { "platform", Extensions.IsOnSteam(rig) ? "STEAM" : "QUEST" },
+                    { "platform", Extensions.IsOnSteam(rig) == "S. FIRST LOGIN" ? "STEAM" : "QUEST" },
                 },
             }, PhotonNetwork.CurrentRoom.Name, PhotonNetwork.CloudRegion));
         }
@@ -149,27 +147,26 @@ public class TelemetrySorter : MonoBehaviour
 
         byte[] raw = Encoding.UTF8.GetBytes(json);
 
-        UnityWebRequest request = new(DeezUrl + "/syncdata", "POST");
+        UnityWebRequest request = new(Constants.DeezUrl + "/syncdata", "POST");
         request.uploadHandler = new UploadHandlerRaw(raw);
         request.SetRequestHeader("Content-Type", "application/json");
         request.downloadHandler = new DownloadHandlerBuffer();
 
         yield return request.SendWebRequest();
 
-        UnityWebRequest zlothyrequest = new("https://hamburbur.org" + "/syncdata", "POST");
-        zlothyrequest.uploadHandler = new UploadHandlerRaw(raw);
-        zlothyrequest.SetRequestHeader("Content-Type", "application/json");
-        zlothyrequest.downloadHandler = new DownloadHandlerBuffer();
+        UnityWebRequest hamburburWebRequest = new(Constants.HamburburUrl + "/syncdata", "POST");
+        hamburburWebRequest.uploadHandler = new UploadHandlerRaw(raw);
+        hamburburWebRequest.SetRequestHeader("Content-Type", "application/json");
+        hamburburWebRequest.downloadHandler = new DownloadHandlerBuffer();
 
-        yield return zlothyrequest.SendWebRequest();
-
+        yield return hamburburWebRequest.SendWebRequest();
     }
 
     private static IEnumerator UploadTrackerData(JObject data)
     {
         byte[] raw = Encoding.UTF8.GetBytes(data.ToString(Formatting.None));
 
-        UnityWebRequest request = new(DeezUrl + "/api/tracker/upload", "POST");
+        UnityWebRequest request = new(Constants.DeezUrl + "/api/tracker/upload", "POST");
         request.uploadHandler = new UploadHandlerRaw(raw);
         request.SetRequestHeader("Content-Type", "application/json");
         request.SetRequestHeader("auth-key", "hamburbur-tracker-secret");

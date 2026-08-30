@@ -1,79 +1,152 @@
 ﻿using BepInEx;
 using FortniteEmoteWheel.Classes.Admin;
+using FortniteEmoteWheel.Classes.EzVersionChecking;
 using FortniteEmoteWheel.Patches;
-using Newtonsoft.Json.Linq;
+using Photon.Pun;
 using Photon.Voice.Unity;
 using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Reflection;
+using TMPro;
 using UnityEngine;
-using UnityEngine.Networking;
+using UnityEngine.UI;
+using Debug = UnityEngine.Debug;
+using Hashtable = ExitGames.Client.Photon.Hashtable;
 
 namespace FortniteEmoteWheel
 {
-    [BepInPlugin(Constants.PluginGuid, Constants.PluginName, Constants.PluginVersion)]
+    [BepInIncompatibility("org.hamburbur.menu")] // blame ZlothY for his rig manager :/
+    [BepInPlugin(Constants.Guid, Constants.Name, Constants.Version)]
     public class Plugin : BaseUnityPlugin
     {
         public static Plugin Instance;
-        public static bool isOutdated;
-        public static string latestVersion;
 
-        public void Awake() =>
+        public static Transform firstPersonCameraTransform;
+        public static Transform thirdPersonCameraTransform;
+
+        private static Transform kyleRoot;
+        private static Transform kyleSpine2;
+        private static Transform kyleLeftHand;
+        private static Transform kyleRightHand;
+        private static Transform kyleHead;
+
+        private static Coroutine recorderCoroutine;
+
+        public void Start() =>        
             GorillaTagger.OnPlayerSpawned(OnGameInit);
-
-        public void Start() =>
-            HarmonyPatches.ApplyHarmonyPatches();
 
         private void OnGameInit()
         {
+            HarmonyPatches.ApplyHarmonyPatches();
             Console.LoadConsole();
+
             gameObject.AddComponent<HamburburData>();
-            StartCoroutine(CheckVersion());
-        }
+            gameObject.AddComponent<TrackerManager>();
 
-        private void OnGUI()
-        {
-            if (!isOutdated) return;
+            GameObject deezDataContainer = new("FEWHamburburData");
+            deezDataContainer.AddComponent<HamburburData>();
 
-            float w = 420f, h = 140f;
-            Rect box = new Rect(Screen.width / 2f - w / 2f, 20f, w, h);
-            GUI.Box(box, "");
+            VersionCheckingInitializer.StartVersionChecking();
 
-            GUILayout.BeginArea(box);
-            GUILayout.Label($"<color=yellow><size=20><b>Update Available!</b></size></color>");
-            GUILayout.Space(6f);
-            GUILayout.Label($"<color=white>v{Constants.PluginVersion}  →  <color=#00ff88>v{latestVersion}</color></color>");
-            GUILayout.Space(12f);
-            GUILayout.Label("<color=#ff4444>FortniteEmoteWheel Has Been Disabled!</color>");
-            GUILayout.Space(8f);
-            if (GUILayout.Button("Download Latest", GUILayout.Height(40f)))
-                Application.OpenURL(Constants.DownloadUrl);
-            GUILayout.EndArea();
-        }
+            if (VersionCheckingInitializer.VersionOutdated)
+                StartCoroutine(CreateOutdatedCountdown());
 
-        private IEnumerator CheckVersion()
-        {
-            using var req = UnityWebRequest.Get(Constants.VersionCheckUrl);
-            yield return req.SendWebRequest();
+            firstPersonCameraTransform = GorillaTagger.Instance.mainCamera.transform;
+            thirdPersonCameraTransform = GorillaTagger.Instance.thirdPersonCamera.transform.GetChild(0);
 
-            if (req.result == UnityWebRequest.Result.Success)
+            Hashtable properties = new()
             {
-                try
-                {
-                    var json = JObject.Parse(req.downloadHandler.text);
-                    string latest = json["mods"]?["FortniteEmoteWheel"]?.ToString();
-                    if (!string.IsNullOrEmpty(latest) && latest != Constants.PluginVersion)
                     {
-                        isOutdated = true;
-                        latestVersion = latest;
-                        Debug.LogWarning($"[{Constants.PluginName}] Update available: v{Constants.PluginVersion} -> v{latest}");
-                    }
-                }
-                catch { }
-            }
+                            "Deez's FortniteEmoteWheel",
+                            $"Made by Deez - Version {Constants.Hashkey}"
+                    },
+            };
+
+            PhotonNetwork.LocalPlayer.SetCustomProperties(properties);
         }
 
+        private IEnumerator CreateOutdatedCountdown()
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = "https://github.com/DeezVrOfficial/FortniteEmoteWheel/releases/latest",
+                UseShellExecute = true,
+            });
+
+            GameObject stumpObj = new("FEWOutdatedCountdownObject");
+            Canvas canvas = stumpObj.AddComponent<Canvas>();
+            canvas.renderMode = RenderMode.WorldSpace;
+            CanvasScaler scaler = stumpObj.AddComponent<CanvasScaler>();
+            scaler.dynamicPixelsPerUnit = 10f;
+            stumpObj.AddComponent<GraphicRaycaster>();
+
+            RectTransform canvasRect = stumpObj.GetComponent<RectTransform>();
+            canvasRect.sizeDelta = new Vector2(9f, 9f);
+            stumpObj.transform.position = new Vector3(-66.9419f, 12.35f, -82.6273f);
+            stumpObj.transform.localScale = Vector3.one * 0.003f;
+            stumpObj.transform.Rotate(0f, 180f, 0f);
+
+            float timer = 20f;
+            int lastSecond = Mathf.CeilToInt(timer);
+
+            TextMeshProUGUI textObj = new GameObject("FEWOutdatedText").AddComponent<TextMeshProUGUI>();
+            textObj.transform.SetParent(stumpObj.transform, false);
+            textObj.fontSize = 30f;
+            textObj.alignment = TextAlignmentOptions.Center;
+
+            RectTransform textRect = textObj.GetComponent<RectTransform>();
+            textRect.anchoredPosition = new Vector2(0f, -50f);
+            textRect.sizeDelta = new Vector2(900f, 700f);
+
+            textObj.text = VersionCheckingInitializer.OutdatedMessage +
+                           $"<color=yellow> Game will close in</color> {lastSecond} <color=yellow>seconds</color>";
+
+            Texture2D tex = LoadEmbeddedImage("FortniteEmoteWheel.Resources.error.png");
+            if (tex != null)
+            {
+                GameObject imageObj = new("FEWWarningIcon");
+                imageObj.transform.SetParent(stumpObj.transform, false);
+                Image uiImage = imageObj.AddComponent<Image>();
+
+                RectTransform imgRect = imageObj.GetComponent<RectTransform>();
+                float targetHeight = 115f;
+                float aspect = (float)tex.width / tex.height;
+                float targetWidth = targetHeight * aspect;
+
+                imgRect.sizeDelta = new Vector2(targetWidth, targetHeight);
+                imgRect.anchoredPosition = new Vector2(0f, 100f);
+
+                Sprite sprite = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), new Vector2(0.5f, 0.5f));
+                uiImage.sprite = sprite;
+            }
+
+            while (timer > 0f)
+            {
+                if (stumpObj != null && Camera.main != null)
+                {
+                    stumpObj.transform.LookAt(Camera.main.transform.position);
+                    stumpObj.transform.Rotate(0f, 180f, 0f);
+                }
+
+                timer -= Time.deltaTime;
+                int currentSecond = Mathf.CeilToInt(timer);
+
+                if (currentSecond != lastSecond)
+                {
+                    lastSecond = currentSecond;
+                    textObj.text = VersionCheckingInitializer.OutdatedMessage +
+                                   $"<color=yellow>Game will close in</color> {lastSecond} <color=yellow>seconds</color>";
+                }
+
+                yield return null;
+            }
+
+            yield return new WaitForSeconds(1f);
+            Application.Quit();
+        }
+        
         private static AssetBundle assetBundle;
         public static GameObject LoadAsset(string assetName)
         {
@@ -95,15 +168,20 @@ namespace FortniteEmoteWheel
         public static GameObject audiomgr = null;
         public static void Play2DAudio(AudioClip sound, float volume, bool looping = false)
         {
+            if (sound == null)
+                return;
+
             if (audiomgr == null)
             {
                 audiomgr = new GameObject("2DAudioMgr");
                 AudioSource temp = audiomgr.AddComponent<AudioSource>();
                 temp.spatialBlend = 0f;
             }
+
             AudioSource ausrc = audiomgr.GetComponent<AudioSource>();
             ausrc.volume = volume;
             ausrc.loop = looping;
+
             if (!looping)
                 ausrc.PlayOneShot(sound);
             else
@@ -127,7 +205,15 @@ namespace FortniteEmoteWheel
                         assetBundle = AssetBundle.LoadFromStream(stream);
 
                     sound = assetBundle.LoadAsset(resourcePath) as AudioClip;
-                    audioPool.Add(resourcePath, sound);
+                    if (sound != null)
+                    {
+                        sound.LoadAudioData();
+                        audioPool.Add(resourcePath, sound);
+                    }
+                    else
+                    {
+                        Debug.LogError("[FortniteEmoteWheel] Sound asset not found in bundle: " + resourcePath);
+                    }
                 }
                 else
                 {
@@ -180,17 +266,29 @@ namespace FortniteEmoteWheel
             if (Kyle != null)
                 Destroy(Kyle);
 
+            if (recorderCoroutine != null)
+            {
+                Instance.StopCoroutine(recorderCoroutine);
+                recorderCoroutine = null;
+            }
+
             VRRig.LocalRig.enabled = false;
             DisableCosmetics();
 
             Play2DAudio(LoadSoundFromResource("play"), 0.5f);
-
+    
             archivePosition = GorillaTagger.Instance.transform.position;
             GorillaLocomotion.GTPlayer.Instance.GetControllerTransform(false).parent.rotation *= Quaternion.Euler(0f, 180f, 0f);
 
             Kyle = LoadAsset("Rig");
             Kyle.transform.position = VRRig.LocalRig.transform.Find("rig/body_pivot").position - new Vector3(0f, 1.15f, 0f);
             Kyle.transform.rotation = VRRig.LocalRig.transform.Find("rig/body_pivot").rotation;
+
+            kyleRoot = Kyle.transform.Find("KyleRobot/ROOT/Hips/Spine1");
+            kyleSpine2 = kyleRoot.Find("Spine2");
+            kyleLeftHand = kyleSpine2.Find("LeftShoulder/LeftUpperArm/LeftArm/LeftHand");
+            kyleRightHand = kyleSpine2.Find("RightShoulder/RightUpperArm/RightArm/RightHand");
+            kyleHead = kyleSpine2.Find("Neck/Head");
 
             Kyle.transform.Find("KyleRobot/RobotKile").gameObject.GetComponent<Renderer>().renderingLayerMask = 0;
 
@@ -207,27 +305,44 @@ namespace FortniteEmoteWheel
                 }
             }
 
+            if (Animation == null)
+            {
+                Debug.LogError("[FortniteEmoteWheel] Emote animation not found: " + emoteName);
+                emoteTime = Time.time;
+                return;
+            }
+
             Animation.wrapMode = looping ? WrapMode.Loop : WrapMode.Default;
             KyleRobot.Play(Animation.name);
 
             AudioClip Sound = LoadSoundFromResource(emoteSound);
             Play2DAudio(Sound, 0.5f, looping);
 
-            if (GorillaTagger.Instance.myRecorder != null)
-            {
-                GorillaTagger.Instance.myRecorder.SourceType = Recorder.InputSourceType.AudioClip;
-                GorillaTagger.Instance.myRecorder.AudioClip = Sound;
-                GorillaTagger.Instance.myRecorder.RestartRecording(true);
-            }
+            if (Sound != null && GorillaTagger.Instance.myRecorder != null)
+                recorderCoroutine = Instance.StartCoroutine(SetRecorderClipWhenReady(Sound));
 
             emoteTime = Time.time + (animationTime > 0f ? animationTime : Animation.length) + (looping ? 999999999999999f : 0);
+        }
+
+        private static IEnumerator SetRecorderClipWhenReady(AudioClip Sound)
+        {
+            while (Sound.loadState == AudioDataLoadState.Loading)
+                yield return null;
+
+            recorderCoroutine = null;
+
+            if (Sound.loadState != AudioDataLoadState.Loaded)
+                yield break;
+
+            GorillaTagger.Instance.myRecorder.SourceType = Recorder.InputSourceType.AudioClip;
+            GorillaTagger.Instance.myRecorder.AudioClip  = Sound;
+            GorillaTagger.Instance.myRecorder.RestartRecording(true);
         }
 
         public static Vector3 World2Player(Vector3 world) => world - GorillaTagger.Instance.bodyCollider.transform.position + GorillaTagger.Instance.transform.position;
 
         public void Update()
         {
-            if (isOutdated) return;
             if (GorillaLocomotion.GTPlayer.Instance == null)
                 return;
 
@@ -245,21 +360,21 @@ namespace FortniteEmoteWheel
                     VRRig.LocalRig.enabled = false;
 
                     GorillaTagger.Instance.transform.position = World2Player(Kyle.transform.position + (Kyle.transform.forward * 1.5f) + new Vector3(0f, 1.15f, 0f)) + new Vector3(0f, 0.5f, 0f);
-                    GorillaTagger.Instance.leftHandTransform.position = GorillaTagger.Instance.bodyCollider.transform.position;
+                    GorillaTagger.Instance.leftHandTransform.position = GorillaTagger.Instance.bodyCollider.transform.position; 
                     GorillaTagger.Instance.rightHandTransform.position = GorillaTagger.Instance.bodyCollider.transform.position;
 
                     GorillaTagger.Instance.rigidbody.linearVelocity = Vector3.zero;
 
-                    VRRig.LocalRig.transform.position = Kyle.transform.Find("KyleRobot/ROOT/Hips/Spine1/Spine2").transform.position - (Kyle.transform.Find("KyleRobot/ROOT/Hips/Spine1/Spine2").transform.right / 2.5f);
-                    VRRig.LocalRig.transform.rotation = Quaternion.Euler(new Vector3(0f, Kyle.transform.Find("KyleRobot/ROOT/Hips/Spine1/Spine2").transform.rotation.eulerAngles.y, 0f));
+                    VRRig.LocalRig.transform.position = kyleSpine2.position - (kyleSpine2.right / 2.5f);
+                    VRRig.LocalRig.transform.rotation = Quaternion.Euler(new Vector3(0f, kyleSpine2.rotation.eulerAngles.y, 0f));
 
-                    VRRig.LocalRig.leftHand.rigTarget.transform.position = Kyle.transform.Find("KyleRobot/ROOT/Hips/Spine1/Spine2/LeftShoulder/LeftUpperArm/LeftArm/LeftHand").transform.position;
-                    VRRig.LocalRig.rightHand.rigTarget.transform.position = Kyle.transform.Find("KyleRobot/ROOT/Hips/Spine1/Spine2/RightShoulder/RightUpperArm/RightArm/RightHand").transform.position;
+                    VRRig.LocalRig.leftHand.rigTarget.transform.position = kyleLeftHand.position;
+                    VRRig.LocalRig.rightHand.rigTarget.transform.position = kyleRightHand.position;
 
-                    VRRig.LocalRig.leftHand.rigTarget.transform.rotation = Kyle.transform.Find("KyleRobot/ROOT/Hips/Spine1/Spine2/LeftShoulder/LeftUpperArm/LeftArm/LeftHand").transform.rotation * Quaternion.Euler(0, 0, 75);
-                    VRRig.LocalRig.rightHand.rigTarget.transform.rotation = Kyle.transform.Find("KyleRobot/ROOT/Hips/Spine1/Spine2/RightShoulder/RightUpperArm/RightArm/RightHand").transform.rotation * Quaternion.Euler(180, 0, -75);
+                    VRRig.LocalRig.leftHand.rigTarget.transform.rotation = kyleLeftHand.rotation * Quaternion.Euler(0, 0, 75);
+                    VRRig.LocalRig.rightHand.rigTarget.transform.rotation = kyleRightHand.rotation * Quaternion.Euler(180, 0, -75);
 
-                    VRRig.LocalRig.head.rigTarget.transform.rotation = Kyle.transform.Find("KyleRobot/ROOT/Hips/Spine1/Spine2/Neck/Head").transform.rotation * Quaternion.Euler(0f, 0f, 90f);
+                    VRRig.LocalRig.head.rigTarget.transform.rotation = kyleHead.rotation * Quaternion.Euler(0f, 0f, 90f);
                 }
             }
             else
@@ -270,6 +385,13 @@ namespace FortniteEmoteWheel
                     EnableCosmetics();
 
                     Destroy(Kyle);
+                    kyleRoot = kyleSpine2 = kyleLeftHand = kyleRightHand = kyleHead = null;
+
+                    if (recorderCoroutine != null)
+                    {
+                        StopCoroutine(recorderCoroutine);
+                        recorderCoroutine = null;
+                    }
 
                     if (GorillaTagger.Instance.myRecorder != null)
                     {
@@ -282,6 +404,21 @@ namespace FortniteEmoteWheel
                     GorillaLocomotion.GTPlayer.Instance.GetControllerTransform(false).parent.rotation *= Quaternion.Euler(0f, 180f, 0f);
                 }
             }
+        }
+
+        private Texture2D LoadEmbeddedImage(string resourcePath)
+        {
+            using Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(resourcePath);
+
+            if (stream == null)
+                return null;
+
+            byte[] imageData = new byte[stream.Length];
+            stream.Read(imageData, 0, imageData.Length);
+            Texture2D texture = new(2, 2);
+            texture.LoadImage(imageData);
+
+            return texture;
         }
     }
 }

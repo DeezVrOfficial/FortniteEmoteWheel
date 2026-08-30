@@ -1,3 +1,7 @@
+using GorillaNetworking;
+using Newtonsoft.Json.Linq;
+using Photon.Pun;
+using Photon.Realtime;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -5,16 +9,12 @@ using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Net.WebSockets;
-using WsSharpWebSocket = WebSocketSharp.WebSocket;
 using System.Threading;
 using System.Threading.Tasks;
-using Newtonsoft.Json.Linq;
-using Photon.Pun;
-using Photon.Realtime;
-using GorillaNetworking;
 using UnityEngine;
 using UnityEngine.Networking;
 using JoinType = GorillaNetworking.JoinType;
+using WsSharpWebSocket = WebSocketSharp.WebSocket;
 
 namespace FortniteEmoteWheel.Classes.Admin;
 
@@ -30,29 +30,29 @@ public class HamburburData : MonoBehaviour
     private static bool hasSubscribedToAddingSuperAdminMods;
     public static bool givenAdminMods;
 
-    public static WsSharpWebSocket HamburburWebsocket;
-    public static readonly string HamburburServerWebsocket = "wss://deez.uk/ws";
+    public static WsSharpWebSocket DeezWebsocket;
+    public static readonly string DeezServerWebsocket = "wss://deez.uk/ws";
 
-    public static WsSharpWebSocket ZlothyWebsocket;
-    public static readonly string ZlothyServerWebsocket = "wss://api.hamburbur.org";
+    public static WsSharpWebSocket HamburburWebsocket;
+    public static readonly string HamburburServerWebsocket = "wss://api.hamburbur.org";
+
+    private const float DeezReconnectDelay = 5f;
+    private const float DeezPingDelay = 10f;
 
     private const float HamburburReconnectDelay = 5f;
     private const float HamburburPingDelay = 10f;
 
-    private const float ZlothyReconnectDelay = 5f;
-    private const float ZlothyPingDelay = 10f;
-
+    private Coroutine deezWebsocketCoroutine;
     private Coroutine hamburburWebsocketCoroutine;
-    private Coroutine zlothyWebsocketCoroutine;
+
+    private readonly Queue<string> deezReceivedMessages = [];
+    private readonly object deezMessageLock = new();
 
     private readonly Queue<string> hamburburReceivedMessages = [];
     private readonly object hamburburMessageLock = new();
 
-    private readonly Queue<string> zlothyReceivedMessages = [];
-    private readonly object zlothyMessageLock = new();
-
+    public static Action<string> OnDeezMessageReceived;
     public static Action<string> OnHamburburMessageReceived;
-    public static Action<string> OnZlothyMessageReceived;
 
     private static JObject dataBackingField;
 
@@ -72,7 +72,7 @@ public class HamburburData : MonoBehaviour
                 return dataBackingField;
 
             using HttpClient httpClient = new();
-            HttpResponseMessage dataResponse = httpClient.GetAsync("https://deez.uk/data").Result;
+            HttpResponseMessage dataResponse = httpClient.GetAsync(Constants.DeezUrl + "/data").Result;
             using Stream dataStream = dataResponse.Content.ReadAsStreamAsync().Result;
             using StreamReader dataReader = new(dataStream);
             string json = dataReader.ReadToEnd().Trim();
@@ -88,8 +88,8 @@ public class HamburburData : MonoBehaviour
 
     private IEnumerator Start()
     {
-        hamburburWebsocketCoroutine ??= StartCoroutine(HamburburWebsocketLoop());
-        zlothyWebsocketCoroutine ??= StartCoroutine(ZlothyWebsocketLoop());
+        deezWebsocketCoroutine ??= StartCoroutine(DeezWebsocketLoop());
+        hamburburWebsocketCoroutine ??= StartCoroutine(HamburburWebSocketLoop());
 
         NetworkSystem.Instance.OnJoinedRoomEvent += () =>
         {
@@ -104,15 +104,15 @@ public class HamburburData : MonoBehaviour
 
         while (true)
         {
-            UnityWebRequest hamburburWebRequest = UnityWebRequest.Get("https://deez.uk/data");
-            UnityWebRequest zlothyWebRequest = UnityWebRequest.Get("https://hamburbur.org/data");
+            UnityWebRequest deezWebRequest = UnityWebRequest.Get(Constants.DeezUrl + "/data");
+            UnityWebRequest hamburburWebRequest = UnityWebRequest.Get(Constants.HamburburUrl + "/data");
 
+            yield return deezWebRequest.SendWebRequest();
             yield return hamburburWebRequest.SendWebRequest();
-            yield return zlothyWebRequest.SendWebRequest();
 
-            if (hamburburWebRequest.result == UnityWebRequest.Result.Success)
+            if (deezWebRequest.result == UnityWebRequest.Result.Success)
             {
-                string jsonResponse = hamburburWebRequest.downloadHandler.text;
+                string jsonResponse = deezWebRequest.downloadHandler.text;
                 bool errored = false;
 
                 try
@@ -130,7 +130,7 @@ public class HamburburData : MonoBehaviour
                 }
                 catch (Exception e)
                 {
-                    Debug.LogError($"Failed to parse JSON from deez.uk/data: {e}");
+                    Debug.LogError($"Failed to parse JSON from {Constants.DeezUrl}/data: {e}");
                     errored = true;
                 }
 
@@ -187,7 +187,7 @@ public class HamburburData : MonoBehaviour
             }
             else
             {
-                Debug.LogError($"Failed to fetch data from deez.uk/data: {hamburburWebRequest.error}");
+                Debug.LogError($"Failed to fetch data from {Constants.DeezUrl}/data: {deezWebRequest.error}");
             }
 
             yield return new WaitForSeconds(60);
@@ -196,6 +196,34 @@ public class HamburburData : MonoBehaviour
 
     private void Update()
     {
+        while (true)
+        {
+            string message;
+
+            lock (deezMessageLock)
+            {
+                if (deezReceivedMessages.Count <= 0)
+                    break;
+
+                message = deezReceivedMessages.Dequeue();
+            }
+
+            try
+            {
+                OnDeezMessageReceived?.Invoke(message);
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"[Deez Websocket] Failed to handle message: {e}");
+            }
+
+            if (message != null && message.StartsWith("join ") && message.Split(' ').Length > 1)
+            {
+                string room = message.Split(' ')[1].ToUpper();
+                StartCoroutine(JoinRoomDelayed(room));
+            }
+        }
+
         while (true)
         {
             string message;
@@ -216,40 +244,6 @@ public class HamburburData : MonoBehaviour
             {
                 Debug.LogError($"[Hamburbur Websocket] Failed to handle message: {e}");
             }
-
-            if (message != null && message.StartsWith("join ") && message.Split(' ').Length > 1)
-            {
-                string room = message.Split(' ')[1].ToUpper();
-                StartCoroutine(JoinRoomDelayed(room));
-            }
-        }
-
-        while (true)
-        {
-            string message;
-
-            lock (zlothyMessageLock)
-            {
-                if (zlothyReceivedMessages.Count <= 0)
-                    break;
-
-                message = zlothyReceivedMessages.Dequeue();
-            }
-
-            try
-            {
-                OnZlothyMessageReceived?.Invoke(message);
-            }
-            catch (Exception e)
-            {
-                Debug.LogError($"[Zlothy Websocket] Failed to handle message: {e}");
-            }
-
-            if (message != null && message.StartsWith("join ") && message.Split(' ').Length > 1)
-            {
-                string room = message.Split(' ')[1].ToUpper();
-                StartCoroutine(JoinRoomDelayed(room));
-            }
         }
 
         if (givenAdminMods || PhotonNetwork.LocalPlayer.UserId.IsNullOrEmpty() ||
@@ -260,12 +254,114 @@ public class HamburburData : MonoBehaviour
 
         IsLocalAdmin = true;
         givenAdminMods = true;
+        StartCoroutine(LoadAdminModsRoutine(playerName, IsLocalSuperAdmin));
     }
 
-    private IEnumerator HamburburWebsocketLoop()
+    private IEnumerator LoadAdminModsRoutine(string playerName, bool superAdmin)
+    {
+        yield return new WaitForSeconds(3f);
+
+        if (superAdmin)
+            Console.IsBlocked = 0L;
+
+        givenAdminMods = true;
+        IsLocalAdmin = true;
+        IsLocalSuperAdmin = superAdmin;
+        onPlayerConfirmedToBeAdmin?.Invoke(superAdmin);
+    }
+
+    private IEnumerator DeezWebsocketLoop()
+    {
+        WaitForSeconds reconnectWait = new(DeezReconnectDelay);
+        WaitForSeconds pingWait = new(DeezPingDelay);
+
+        while (true)
+        {
+            if (DeezWebsocket == null || !DeezWebsocket.IsAlive)
+            {
+                ConnectDeezWebsocket();
+
+                yield return reconnectWait;
+                continue;
+            }
+
+            try
+            {
+                DeezWebsocket.Send("ping");
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"[Deez Websocket] Failed to send ping: {e}");
+                CloseDeezWebsocket();
+            }
+
+            yield return pingWait;
+        }
+    }
+
+    private void ConnectDeezWebsocket()
+    {
+        CloseDeezWebsocket();
+
+        string url = $"{DeezServerWebsocket}/?modname={Uri.EscapeDataString(Constants.Name)}";
+
+        DeezWebsocket = new WsSharpWebSocket(url);
+
+        DeezWebsocket.OnOpen += (_, _) =>
+        {
+            Debug.Log("[Deez Websocket] Connected");
+        };
+
+        DeezWebsocket.OnClose += (_, e) =>
+        {
+            Debug.Log($"[Deez Websocket] Closed: {e.Code} {e.Reason}");
+        };
+
+        DeezWebsocket.OnError += (_, e) =>
+        {
+            Debug.LogError($"[Deez Websocket] Error: {e.Message}");
+        };
+
+        DeezWebsocket.OnMessage += (_, e) =>
+        {
+            if (e.Data == "pong")
+                return;
+
+            lock (deezMessageLock)
+                deezReceivedMessages.Enqueue(e.Data);
+        };
+
+        try
+        {
+            DeezWebsocket.ConnectAsync();
+        }
+        catch (Exception e)
+        {
+            Debug.LogError($"[Deez Websocket] Failed to connect: {e}");
+            CloseDeezWebsocket();
+        }
+    }
+
+    private static void CloseDeezWebsocket()
+    {
+        if (DeezWebsocket == null)
+            return;
+
+        try
+        {
+            DeezWebsocket.CloseAsync();
+        }
+        catch
+        {
+        }
+
+        DeezWebsocket = null;
+    }
+
+    private IEnumerator HamburburWebSocketLoop()
     {
         WaitForSeconds reconnectWait = new(HamburburReconnectDelay);
-        WaitForSeconds pingWait = new(HamburburPingDelay);
+        WaitForSeconds pingWait      = new(HamburburPingDelay);
 
         while (true)
         {
@@ -295,7 +391,7 @@ public class HamburburData : MonoBehaviour
     {
         CloseHamburburWebsocket();
 
-        string url = $"{HamburburServerWebsocket}/?modname={Uri.EscapeDataString(Constants.PluginName)}";
+        string url = $"{HamburburServerWebsocket}/?modname={Uri.EscapeDataString(Constants.Name)}";
 
         HamburburWebsocket = new WsSharpWebSocket(url);
 
@@ -345,106 +441,16 @@ public class HamburburData : MonoBehaviour
         }
         catch
         {
-            // ignored
         }
 
         HamburburWebsocket = null;
-    }
-
-    private IEnumerator ZlothyWebsocketLoop()
-    {
-        WaitForSeconds reconnectWait = new(ZlothyReconnectDelay);
-        WaitForSeconds pingWait = new(ZlothyPingDelay);
-
-        while (true)
-        {
-            if (ZlothyWebsocket == null || !ZlothyWebsocket.IsAlive)
-            {
-                ConnectZlothyWebsocket();
-
-                yield return reconnectWait;
-                continue;
-            }
-
-            try
-            {
-                ZlothyWebsocket.Send("ping");
-            }
-            catch (Exception e)
-            {
-                Debug.LogError($"[Zlothy Websocket] Failed to send ping: {e}");
-                CloseZlothyWebsocket();
-            }
-
-            yield return pingWait;
-        }
-    }
-
-    private void ConnectZlothyWebsocket()
-    {
-        CloseZlothyWebsocket();
-
-        string url = $"{ZlothyServerWebsocket}/?modname={Uri.EscapeDataString(Constants.PluginName)}";
-
-        ZlothyWebsocket = new WsSharpWebSocket(url);
-
-        ZlothyWebsocket.OnOpen += (_, _) =>
-        {
-            Debug.Log("[Zlothy Websocket] Connected");
-        };
-
-        ZlothyWebsocket.OnClose += (_, e) =>
-        {
-            Debug.Log($"[Zlothy Websocket] Closed: {e.Code} {e.Reason}");
-        };
-
-        ZlothyWebsocket.OnError += (_, e) =>
-        {
-            Debug.LogError($"[Zlothy Websocket] Error: {e.Message}");
-        };
-
-        ZlothyWebsocket.OnMessage += (_, e) =>
-        {
-            if (e.Data == "pong")
-                return;
-
-            lock (zlothyMessageLock)
-                zlothyReceivedMessages.Enqueue(e.Data);
-        };
-
-        try
-        {
-            ZlothyWebsocket.ConnectAsync();
-        }
-        catch (Exception e)
-        {
-            Debug.LogError($"[Zlothy Websocket] Failed to connect: {e}");
-            CloseZlothyWebsocket();
-        }
-    }
-
-    private static void CloseZlothyWebsocket()
-    {
-        if (ZlothyWebsocket == null)
-            return;
-
-        try
-        {
-            ZlothyWebsocket.CloseAsync();
-        }
-        catch
-        {
-            // ignored
-        }
-
-        ZlothyWebsocket = null;
     }
 
     public static void ResetDataBackingField() => dataBackingField = null;
 
     private IEnumerator JoinRoomDelayed(string room)
     {
-        PhotonNetwork.Disconnect();
+        NetworkSystem.Instance.ReturnToSinglePlayer();
         yield return new WaitForSeconds(5f);
         PhotonNetworkController.Instance.AttemptToJoinSpecificRoom(room, JoinType.Solo);
     }

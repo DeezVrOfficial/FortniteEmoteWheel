@@ -3,14 +3,11 @@
     internal class Constants
     {
         public const string PluginGuid = "com.deez.fortniteemotewheel";
-        public const string PluginName = "FortniteEmoteWheel";
-        public const string PluginVersion = "1.4.7";
+        public const string PluginName = "Deez's FortniteEmoteWheel";
+        public const string PluginVersion = "1.5.2";
+        public const string Hashkey = "github.com/DeezVrOfficial/FortniteEmoteWheel";
 
-        public const string DeezDataUrl = "https://deez.uk/data";
-        public const string VersionCheckUrl = "https://deez.uk/api/version";
-        public const string DownloadUrl = "https://github.com/DeezVrOfficial/FortniteEmoteWheel/releases/latest";
-
-        public const string LocalConsoleObjectGuid = "hamburbur_console";
-        public const string ConsoleObjectGuid      = "seralyth_console";
+        public const string DeezUrl = "https://deez.uk/data";
+        public const string HamburburUrl = "https://hamburbur.org";
     }
 }

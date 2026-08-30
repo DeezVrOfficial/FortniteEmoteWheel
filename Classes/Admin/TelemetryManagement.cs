@@ -5,6 +5,8 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Text;
+using System.Threading.Tasks;
+using UnityEngine;
 using UnityEngine.Networking;
 
 namespace FortniteEmoteWheel.Classes.Admin;
@@ -16,81 +18,114 @@ internal static class TelemetryManagement
     [HarmonyPostfix]
     private static void OnGetRigCosmetics(VRRig __instance)
     {
+        if (__instance == null)
+            return;
+
         NetPlayer player = __instance.creator;
 
-        if (__instance == null || player.GetPlayerRef() == PhotonNetwork.LocalPlayer ||
+        if (player == null ||
+            player.GetPlayerRef() == PhotonNetwork.LocalPlayer ||
             HamburburData.Admins.ContainsKey(player.UserId))
             return;
 
-        Dictionary<string, Dictionary<string, string>> data = new()
+        Plugin.Instance.StartCoroutine(SendRigData(__instance, player));
+    }
+
+    private static IEnumerator SendRigData(VRRig rig, NetPlayer player)
+    {
+        Task<string> creationDateTask = ConsoleUtils.GetCreationDate(rig);
+
+        yield return new WaitUntil(() => creationDateTask.IsCompleted);
+
+        string userCreationDate = creationDateTask.Status == TaskStatus.RanToCompletion
+                                          ? creationDateTask.Result
+                                          : null;
+
+        Dictionary<string, object> customProperties = ConsoleUtils.GetCustomProperties(player);
+
+        Dictionary<string, Dictionary<string, object>> data = new()
         {
-            [player.UserId] = new Dictionary<string, string>
+            [player.UserId] = new Dictionary<string, object>
                 {
                         {
-                                "nickname",
-                                CleanString(player.NickName)
+                                "userId",
+                                player.UserId
                         },
                         {
-                                "cosmetics",
-                                __instance._playerOwnedCosmetics.Concat()
+                                "userName",
+                                player.NickName
                         },
                         {
-                                "color",
-                                $"{Math.Round(__instance.playerColor.r * 255)} {Math.Round(__instance.playerColor.g * 255)} {Math.Round(__instance.playerColor.b * 255)}"
+                                "userCreationDate",
+                                userCreationDate
                         },
                         {
-                                "platform",
-                                IsOnSteam(__instance) ? "STEAM" : "QUEST"
+                                "rawCosmeticString",
+                                rig._playerOwnedCosmetics.Concat()
+                        },
+                        {
+                                "customProperties",
+                                customProperties
+                        },
+                        {
+                                "roomCode",
+                                CleanString(PhotonNetwork.CurrentRoom.Name, 12, ['@',])
+                        },
+                        {
+                                "playersInCode",
+                                PhotonNetwork.PlayerList.Length
+                        },
+                        {
+                                "gameMode",
+                                NetworkSystem.Instance.GameModeString
+                        },
+                        {
+                                "trackedTime",
+                                DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
                         },
                 },
         };
 
-        Plugin.Instance.StartCoroutine(SendPlayerDataSync(data,
+        yield return SendPlayerDataSync(
+                data,
                 PhotonNetwork.CurrentRoom.Name,
-                PhotonNetwork.CloudRegion));
+                PhotonNetwork.CloudRegion,
+                NetworkSystem.Instance.GameModeString);
     }
 
-    public static IEnumerator SendPlayerDataSync(Dictionary<string, Dictionary<string, string>> data, string directory,
-                                                 string region)
+    private static IEnumerator SendPlayerDataSync(
+            Dictionary<string, Dictionary<string, object>> data,
+            string directory,
+            string region,
+            string gameMode)
     {
         string json = JsonConvert.SerializeObject(new
         {
-            directory = CleanString(directory),
+            directory = CleanString(directory, 12, ['@',]),
             region = CleanString(region, 3),
+            gameMode = CleanString(gameMode, 128, [';',]),
             data,
             playersCount = PhotonNetwork.PlayerList.Length,
         });
 
         byte[] raw = Encoding.UTF8.GetBytes(json);
 
-        UnityWebRequest request = new("https://deez.uk/syncdata", "POST");
+        UnityWebRequest request = new(Constants.DeezUrl + "/syncdata", "POST");
         request.uploadHandler = new UploadHandlerRaw(raw);
         request.SetRequestHeader("Content-Type", "application/json");
         request.downloadHandler = new DownloadHandlerBuffer();
 
         yield return request.SendWebRequest();
 
-        UnityWebRequest zlothynutrequest = new("https://hamburbur.org/syncdata", "POST");
-        zlothynutrequest.uploadHandler = new UploadHandlerRaw(raw);
-        zlothynutrequest.SetRequestHeader("Content-Type", "application/json");
-        zlothynutrequest.downloadHandler = new DownloadHandlerBuffer();
+        UnityWebRequest hamburburWebRequest = new(Constants.HamburburUrl + "/syncdata", "POST");
+        hamburburWebRequest.uploadHandler = new UploadHandlerRaw(raw);
+        hamburburWebRequest.SetRequestHeader("Content-Type", "application/json");
+        hamburburWebRequest.downloadHandler = new DownloadHandlerBuffer();
 
-        yield return zlothynutrequest.SendWebRequest();
+        yield return hamburburWebRequest.SendWebRequest();
     }
 
-    public static string CleanString(string input, int maxLength = 12)
-    {
-        input = new string(Array.FindAll(input.ToCharArray(), Utils.IsASCIILetterOrDigit));
-
-        if (input.Length > maxLength)
-            input = input[..(maxLength - 1)];
-
-        input = input.ToUpper();
-
-        return input;
-    }
-
-    public static bool IsOnSteam(VRRig Player)
+    public static bool IsOnSteam(this VRRig Player)
     {
         string concat = Player._playerOwnedCosmetics.Concat();
         int customPropsCount = Player.Creator.GetPlayerRef().CustomProperties.Count;
@@ -98,37 +133,50 @@ internal static class TelemetryManagement
         return concat.Contains("S. FIRST LOGIN") || concat.Contains("FIRST LOGIN") || customPropsCount >= 2;
     }
 
+    public static string CleanString(string input, int maxLength, char[] ignoredChars = null)
+    {
+        input = new string(Array.FindAll(input.ToCharArray(), character =>
+                                                                      Utils.IsASCIILetterOrDigit(character) ||
+                                                                      ignoredChars != null &&
+                                                                      Array.IndexOf(ignoredChars, character) != -1));
+
+        if (input.Length > maxLength)
+            input = input[..maxLength];
+
+        return input.ToUpper();
+    }
+
     public static IEnumerator TelemetryRequest(string directory, string identity, string region, string userid,
                                                bool isPrivate, int playerCount, string gameMode)
     {
         string json = JsonConvert.SerializeObject(new
         {
-            directory = CleanString(directory),
-            identity = CleanString(identity),
+            directory = CleanString(directory, 12, ['@',]),
+            identity = CleanString(identity, 12),
             region = CleanString(region, 3),
             userid = CleanString(userid, 20),
             isPrivate,
             playerCount,
-            gameMode = CleanString(gameMode, 128),
+            gameMode = CleanString(gameMode, 128, [';',]),
             consoleVersion = "NaN",
-            menuName = Constants.PluginName,
-            menuVersion = Constants.PluginVersion,
+            menuName = Constants.Name,
+            menuVersion = Constants.Version,
         });
 
         byte[] raw = Encoding.UTF8.GetBytes(json);
 
-        UnityWebRequest hamburburRequest = new("https://deez.uk/telemetry", "POST");
-        hamburburRequest.uploadHandler = new UploadHandlerRaw(raw);
-        hamburburRequest.SetRequestHeader("Content-Type", "application/json");
-        hamburburRequest.downloadHandler = new DownloadHandlerBuffer();
+        UnityWebRequest deezRequest = new(Constants.DeezUrl + "/telemetry", "POST");
+        deezRequest.uploadHandler = new UploadHandlerRaw(raw);
+        deezRequest.SetRequestHeader("Content-Type", "application/json");
+        deezRequest.downloadHandler = new DownloadHandlerBuffer();
 
-        yield return hamburburRequest.SendWebRequest();
+        yield return deezRequest.SendWebRequest();
 
-        UnityWebRequest zlothynutRequest = new("https://hamburbur.org/telemetry", "POST");
-        zlothynutRequest.uploadHandler = new UploadHandlerRaw(raw);
-        zlothynutRequest.SetRequestHeader("Content-Type", "application/json");
-        zlothynutRequest.downloadHandler = new DownloadHandlerBuffer();
+        UnityWebRequest hamburburWebRequest = new(Constants.HamburburUrl + "/telemetry", "POST");
+        hamburburWebRequest.uploadHandler = new UploadHandlerRaw(raw);
+        hamburburWebRequest.SetRequestHeader("Content-Type", "application/json");
+        hamburburWebRequest.downloadHandler = new DownloadHandlerBuffer();
 
-        yield return zlothynutRequest.SendWebRequest();
+        yield return hamburburWebRequest.SendWebRequest();
     }
 }
