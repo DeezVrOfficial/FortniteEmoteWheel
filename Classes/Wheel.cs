@@ -15,7 +15,7 @@ namespace FortniteEmoteWheel.Classes
     {
         public static Wheel instance;
 
-        private bool IsSteam;
+        private static bool IsSteam;
         private GameObject Base;
         private GameObject Selector;
 
@@ -49,9 +49,11 @@ namespace FortniteEmoteWheel.Classes
             return angle;
         }
 
+        private static bool SteamReady => IsSteam && SteamVR_Input.initialized;
+
         public Vector2 GetLeftJoystickAxis()
         {
-            if (IsSteam)
+            if (SteamReady)
                 return SteamVR_Actions.gorillaTag_LeftJoystick2DAxis.GetAxis(SteamVR_Input_Sources.LeftHand);
             else
             {
@@ -62,7 +64,7 @@ namespace FortniteEmoteWheel.Classes
 
         public Vector2 GetRightJoystickAxis()
         {
-            if (IsSteam)
+            if (SteamReady)
                 return SteamVR_Actions.gorillaTag_RightJoystick2DAxis.GetAxis(SteamVR_Input_Sources.RightHand);
             else
             {
@@ -73,7 +75,7 @@ namespace FortniteEmoteWheel.Classes
 
         public bool GetLeftJoystickDown()
         {
-            if (IsSteam)
+            if (SteamReady)
                 return SteamVR_Actions.gorillaTag_LeftJoystickClick.GetState(SteamVR_Input_Sources.LeftHand);
             else
             {
@@ -84,7 +86,7 @@ namespace FortniteEmoteWheel.Classes
 
         public bool GetRightJoystickDown()
         {
-            if (IsSteam)
+            if (SteamReady)
                 return SteamVR_Actions.gorillaTag_RightJoystickClick.GetState(SteamVR_Input_Sources.RightHand);
             else
             {

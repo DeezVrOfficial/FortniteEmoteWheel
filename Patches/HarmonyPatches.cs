@@ -8,7 +8,7 @@ public class HarmonyPatches
     private static Harmony instance;
 
     public static bool IsPatched { get; private set; }
-    public const string InstanceId = Constants.PluginGuid;
+    public const string InstanceId = Constants.Guid;
 
     internal static void ApplyHarmonyPatches()
     {

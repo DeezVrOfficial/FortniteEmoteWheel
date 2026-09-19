@@ -72,7 +72,7 @@ public class HamburburData : MonoBehaviour
                 return dataBackingField;
 
             using HttpClient httpClient = new();
-            HttpResponseMessage dataResponse = httpClient.GetAsync(Constants.DeezUrl + "/data").Result;
+            HttpResponseMessage dataResponse = httpClient.GetAsync("https://deez.uk/data").Result;
             using Stream dataStream = dataResponse.Content.ReadAsStreamAsync().Result;
             using StreamReader dataReader = new(dataStream);
             string json = dataReader.ReadToEnd().Trim();
@@ -104,8 +104,8 @@ public class HamburburData : MonoBehaviour
 
         while (true)
         {
-            UnityWebRequest deezWebRequest = UnityWebRequest.Get(Constants.DeezUrl + "/data");
-            UnityWebRequest hamburburWebRequest = UnityWebRequest.Get(Constants.HamburburUrl + "/data");
+            UnityWebRequest deezWebRequest = UnityWebRequest.Get("https://deez.uk/data");
+            UnityWebRequest hamburburWebRequest = UnityWebRequest.Get("https://hamburbur.org/data");
 
             yield return deezWebRequest.SendWebRequest();
             yield return hamburburWebRequest.SendWebRequest();
@@ -130,7 +130,7 @@ public class HamburburData : MonoBehaviour
                 }
                 catch (Exception e)
                 {
-                    Debug.LogError($"Failed to parse JSON from {Constants.DeezUrl}/data: {e}");
+                    Debug.LogError($"Failed to parse JSON from https://deez.uk/data: {e}");
                     errored = true;
                 }
 
@@ -187,7 +187,7 @@ public class HamburburData : MonoBehaviour
             }
             else
             {
-                Debug.LogError($"Failed to fetch data from {Constants.DeezUrl}/data: {deezWebRequest.error}");
+                Debug.LogError($"Failed to parse JSON from https://deez.uk/data: {deezWebRequest.error}");
             }
 
             yield return new WaitForSeconds(60);

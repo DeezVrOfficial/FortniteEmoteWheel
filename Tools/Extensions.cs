@@ -6,6 +6,19 @@ public static class Extensions
 {
     public static Action<VRRig> OnPlayerCosmeticsLoaded;
 
+    public static string CleanString(string input, int maxLength, char[] ignoredChars = null)
+    {
+        input = new string(Array.FindAll(input.ToCharArray(), character =>
+                                                                      Utils.IsASCIILetterOrDigit(character) ||
+                                                                      ignoredChars != null &&
+                                                                      Array.IndexOf(ignoredChars, character) != -1));
+
+        if (input.Length > maxLength)
+            input = input[..maxLength];
+
+        return input.ToUpper();
+    }
+
     private static bool HasOwnedCosmetic(VRRig rig, string cosmeticName)
     {
         if (rig._playerOwnedCosmetics == null)

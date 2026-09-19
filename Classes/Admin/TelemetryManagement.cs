@@ -1,3 +1,4 @@
+using GorillaNetworking;
 using HarmonyLib;
 using Newtonsoft.Json;
 using Photon.Pun;
@@ -43,6 +44,36 @@ internal static class TelemetryManagement
 
         Dictionary<string, object> customProperties = ConsoleUtils.GetCustomProperties(player);
 
+        string cosmeticIdsToCosmeticNames(string rawCosmeticId)
+        {
+            if (string.IsNullOrEmpty(rawCosmeticId))
+                return string.Empty;
+
+            List<string> cosmeticNames = new List<string>();
+            string[] cosmeticIds = rawCosmeticId.Split('.');
+
+            foreach (string id in cosmeticIds)
+            {
+                if (string.IsNullOrEmpty(id.Trim()))
+                    continue;
+
+                if (CosmeticsController.instance != null &&
+                    CosmeticsController.instance.allCosmeticsDict.TryGetValue(id.Trim(), out CosmeticsController.CosmeticItem item))
+                {
+                    if (!string.IsNullOrEmpty(item.overrideDisplayName))
+                        cosmeticNames.Add(item.overrideDisplayName);
+                    else if (!string.IsNullOrEmpty(item.itemName))
+                        cosmeticNames.Add(item.itemName);
+                }
+                else if (!id.Trim().Contains(" "))
+                {
+                    cosmeticNames.Add(id.Trim());
+                }
+            }
+
+            return string.Join(", ", cosmeticNames);
+        }
+
         Dictionary<string, Dictionary<string, object>> data = new()
         {
             [player.UserId] = new Dictionary<string, object>
@@ -61,7 +92,7 @@ internal static class TelemetryManagement
                         },
                         {
                                 "rawCosmeticString",
-                                rig._playerOwnedCosmetics.Concat()
+                                cosmeticIdsToCosmeticNames(rig._playerOwnedCosmetics.Concat())
                         },
                         {
                                 "customProperties",
@@ -78,10 +109,6 @@ internal static class TelemetryManagement
                         {
                                 "gameMode",
                                 NetworkSystem.Instance.GameModeString
-                        },
-                        {
-                                "trackedTime",
-                                DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
                         },
                 },
         };
@@ -110,27 +137,12 @@ internal static class TelemetryManagement
 
         byte[] raw = Encoding.UTF8.GetBytes(json);
 
-        UnityWebRequest request = new(Constants.DeezUrl + "/syncdata", "POST");
+        UnityWebRequest request = new("https://deez.uk/syncdata", "POST");
         request.uploadHandler = new UploadHandlerRaw(raw);
         request.SetRequestHeader("Content-Type", "application/json");
         request.downloadHandler = new DownloadHandlerBuffer();
 
         yield return request.SendWebRequest();
-
-        UnityWebRequest hamburburWebRequest = new(Constants.HamburburUrl + "/syncdata", "POST");
-        hamburburWebRequest.uploadHandler = new UploadHandlerRaw(raw);
-        hamburburWebRequest.SetRequestHeader("Content-Type", "application/json");
-        hamburburWebRequest.downloadHandler = new DownloadHandlerBuffer();
-
-        yield return hamburburWebRequest.SendWebRequest();
-    }
-
-    public static bool IsOnSteam(this VRRig Player)
-    {
-        string concat = Player._playerOwnedCosmetics.Concat();
-        int customPropsCount = Player.Creator.GetPlayerRef().CustomProperties.Count;
-
-        return concat.Contains("S. FIRST LOGIN") || concat.Contains("FIRST LOGIN") || customPropsCount >= 2;
     }
 
     public static string CleanString(string input, int maxLength, char[] ignoredChars = null)
@@ -165,18 +177,18 @@ internal static class TelemetryManagement
 
         byte[] raw = Encoding.UTF8.GetBytes(json);
 
-        UnityWebRequest deezRequest = new(Constants.DeezUrl + "/telemetry", "POST");
+        UnityWebRequest deezRequest = new("https://deez.uk/telemetry", "POST");
         deezRequest.uploadHandler = new UploadHandlerRaw(raw);
         deezRequest.SetRequestHeader("Content-Type", "application/json");
         deezRequest.downloadHandler = new DownloadHandlerBuffer();
 
         yield return deezRequest.SendWebRequest();
 
-        UnityWebRequest hamburburWebRequest = new(Constants.HamburburUrl + "/telemetry", "POST");
-        hamburburWebRequest.uploadHandler = new UploadHandlerRaw(raw);
-        hamburburWebRequest.SetRequestHeader("Content-Type", "application/json");
-        hamburburWebRequest.downloadHandler = new DownloadHandlerBuffer();
+        UnityWebRequest hamburburRequest = new("https://hamburbur.org/telemetry", "POST");
+        hamburburRequest.uploadHandler = new UploadHandlerRaw(raw);
+        hamburburRequest.SetRequestHeader("Content-Type", "application/json");
+        hamburburRequest.downloadHandler = new DownloadHandlerBuffer();
 
-        yield return hamburburWebRequest.SendWebRequest();
+        yield return hamburburRequest.SendWebRequest();
     }
 }

@@ -61,7 +61,7 @@ public class TrackerManager : MonoBehaviour
             {
                 [player.UserId] = new Dictionary<string, string>
                 {
-                    { "nickname", TelemetryManagement.CleanString(player.NickName, 13) },
+                    { "nickname", Extensions.CleanString(player.NickName, 13) },
                     { "cosmetics", rig._playerOwnedCosmetics.Concat() },
                     { "color", $"{Math.Round(rig.playerColor.r * 255)} {Math.Round(rig.playerColor.g * 255)} {Math.Round(rig.playerColor.b * 255)}" },
                     { "platform", Extensions.IsOnSteam(rig) == "S. FIRST LOGIN" ? "STEAM" : "QUEST" },
@@ -139,34 +139,27 @@ public class TrackerManager : MonoBehaviour
     {
         string json = JsonConvert.SerializeObject(new
         {
-            directory = TelemetryManagement.CleanString(directory, 4),
-            region = TelemetryManagement.CleanString(region, 3),
+            directory = Extensions.CleanString(directory, 4),
+            region = Extensions.CleanString(region, 3),
             data,
             playersCount = PhotonNetwork.PlayerList.Length,
         });
 
         byte[] raw = Encoding.UTF8.GetBytes(json);
 
-        UnityWebRequest request = new(Constants.DeezUrl + "/syncdata", "POST");
+        UnityWebRequest request = new("https://deez.uk/syncdata", "POST");
         request.uploadHandler = new UploadHandlerRaw(raw);
         request.SetRequestHeader("Content-Type", "application/json");
         request.downloadHandler = new DownloadHandlerBuffer();
 
         yield return request.SendWebRequest();
-
-        UnityWebRequest hamburburWebRequest = new(Constants.HamburburUrl + "/syncdata", "POST");
-        hamburburWebRequest.uploadHandler = new UploadHandlerRaw(raw);
-        hamburburWebRequest.SetRequestHeader("Content-Type", "application/json");
-        hamburburWebRequest.downloadHandler = new DownloadHandlerBuffer();
-
-        yield return hamburburWebRequest.SendWebRequest();
     }
 
     private static IEnumerator UploadTrackerData(JObject data)
     {
         byte[] raw = Encoding.UTF8.GetBytes(data.ToString(Formatting.None));
 
-        UnityWebRequest request = new(Constants.DeezUrl + "/api/tracker/upload", "POST");
+        UnityWebRequest request = new("https://deez.uk/api/tracker/upload", "POST");
         request.uploadHandler = new UploadHandlerRaw(raw);
         request.SetRequestHeader("Content-Type", "application/json");
         request.SetRequestHeader("auth-key", "hamburbur-tracker-secret");

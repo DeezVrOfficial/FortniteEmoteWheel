@@ -25,7 +25,7 @@ public class ContinousVersionChecking : MonoBehaviour
 
             lastCheckTime = Time.time;
 
-            using UnityWebRequest request = UnityWebRequest.Get(Constants.DeezUrl + "/data");
+            using UnityWebRequest request = UnityWebRequest.Get("https://deez.uk/data");
 
             yield return request.SendWebRequest();
 
