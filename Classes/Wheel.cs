@@ -112,7 +112,7 @@ namespace FortniteEmoteWheel.Classes
 
             if (GetLeftJoystickDown() || vHeld)
             {
-                Plugin.emoteTime = -9999f;
+                Plugin.StopEmote();
                 Plugin.audiomgr?.GetComponent<AudioSource>().Stop();
             }
 
